@@ -1,7 +1,7 @@
 """
 Various preconditioners used for iterative solution of full FE-BI system.
 
-Copyright (C) 2023 Niklas Wingern
+Copyright (C) 2023 Niklas Wingren
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by

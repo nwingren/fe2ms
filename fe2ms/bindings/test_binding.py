@@ -2,7 +2,7 @@
 Test script for DEMCEM bindings. ./test/demcem_example_runner.cpp needs to be built using CMake and
 run to generate the reference results necessary for this to run.
 
-Copyright (C) 2023 Niklas Wingern
+Copyright (C) 2023 Niklas Wingren
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by

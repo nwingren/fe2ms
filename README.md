@@ -69,7 +69,7 @@ pip install fe2ms/
 
 ## License
 
-Copyright (C) 2023 Niklas Wingern
+Copyright (C) 2023 Niklas Wingren
 
 FE2MS is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
