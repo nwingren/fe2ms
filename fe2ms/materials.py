@@ -1,7 +1,6 @@
 """
 Contains electromagnetic properties of various materials on the format
-(epsr, mur) where each property can be complex. Properties should be valid at
-frequencies ~1 GHz.
+(epsr, mur) where each property can be complex.
 """
 
 VACUUM = (1., 1.)

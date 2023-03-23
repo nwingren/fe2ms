@@ -63,7 +63,7 @@ def direct(
     M_prec = _sparse_linalg.factorized(sparse_mat)
     del sparse_mat
 
-    return M_prec.solve
+    return M_prec
 
 
 def iterative_ilu(
