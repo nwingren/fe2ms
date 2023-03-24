@@ -51,7 +51,7 @@ def direct(
     Returns
     -------
     M : function
-        SuperLU solve function which applies the preconditioner.
+        Solve function which applies the preconditioner to a vector.
     """
 
     sparse_mat = _make_sparse_mat(
