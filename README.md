@@ -5,7 +5,7 @@ FE2MS (Fast and Efficient ElectroMagnetic Solvers) is a Python package based on 
 
 ## Installation
 
-FE2MS is based on FEniCSx which is available on macOS and Linux. However, it has only been tested on Ubuntu and the installation instructions are written for this.
+FE2MS is based on FEniCSx which is available on macOS and Linux. However, it has only been tested on Ubuntu and the installation instructions are written for this. For Windows users, Linux can be run easily using Windows Subsystem for Linux. Installation instructions and more information can be found [here](https://learn.microsoft.com/en-us/windows/wsl/install).
 
 The package only has a minimal setup now (without automatic installation of dependencies) and these installation instruction are likely to change in the future.
 Installation using mamba (similar to conda) is recommended. The instructions are as follows.
@@ -43,7 +43,7 @@ pip install --no-deps AdaptOctree/
 This will build DEMCEM and the necessary pybind11 bindings for it.
 
 ```bash
-mamba install cxx cmake
+mamba install cxx-compiler cmake
 
 cd ~
 git clone https://github.com/thanospol/DEMCEM.git
@@ -66,6 +66,14 @@ Finally, this will install the fe2ms package into the mamba environment.
 cd ~
 pip install fe2ms/
 ```
+
+## Demos
+
+There are two demos supplied in the ```demo``` directory of this repository. All of them are possible to run without additional dependencies.
+
+The first demo ```coated_demo.py``` computes the bistatic RCS for a PEC sphere coated by two layers (air and PLA plastic). It uses a mesh ```coated.msh``` which can be generated fully using gmsh in ```create_mesh_coated.py```.
+
+The second demo ```windturbine_demo.py``` computes the monostatic RCS for a wind turbine rotor constructed as a fiberglass shell with an internal structure of fiberglass spars and air. It uses the mesh ```rotor.msh``` which was generated in FreeCAD and gmsh. Note that this demo is more time and resource heavy to run than ```coated_demo.py``` as the problem is larger and has multiple right-hand sides.
 
 ## License
 
