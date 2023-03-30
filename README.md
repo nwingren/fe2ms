@@ -1,11 +1,13 @@
 # FE2MS
 
-FE2MS (Fast and Efficient ElectroMagnetic Solvers) is a Python package based on [FEniCSx](https://fenicsproject.org/) implementing the finite element-boundary integral (FE-BI) method for electromagnetic scattering problems.
+FE2MS (Fast and Efficient ElectroMagnetic Solvers) is a Python package implementing the finite element-boundary integral (FE-BI) method for electromagnetic scattering problems.
+
+It uses many other open source packages. Some of the more specialized are [FEniCSx](https://fenicsproject.org/), [DEMCEM](https://github.com/thanospol/DEMCEM), [gmsh](https://gmsh.info/) and [AdaptOctree](https://github.com/Excalibur-SLE/AdaptOctree). Other, more general purpose packages are [NumPy](https://numpy.org/), [SciPy](https://scipy.org/), [UMFPACK](https://scikit-umfpack.github.io/scikit-umfpack/) and [Numba](https://numba.pydata.org/). For a complete list, see installation instructions.
 
 
 ## Installation
 
-FE2MS is based on FEniCSx which is available on macOS and Linux. However, it has only been tested on Ubuntu and the installation instructions are written for this. For Windows users, Linux can be run easily using Windows Subsystem for Linux. Installation instructions and more information can be found [here](https://learn.microsoft.com/en-us/windows/wsl/install).
+FE2MS is primarily based on FEniCSx which is available on macOS and Linux. However, installation of this package has only been tested on Ubuntu and the installation instructions are written for this. For Windows users, Linux can be run easily using Windows Subsystem for Linux. Installation instructions and more information can be found [here](https://learn.microsoft.com/en-us/windows/wsl/install).
 
 The package only has a minimal setup now (without automatic installation of dependencies) and these installation instruction are likely to change in the future.
 Installation using mamba (similar to conda) is recommended. The instructions are as follows.
