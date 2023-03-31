@@ -7,7 +7,7 @@ It uses many other open source packages. Some of the more specialized are [FEniC
 
 ## Installation
 
-FE2MS is primarily based on FEniCSx which is available on macOS and Linux. However, installation of this package has only been tested on Ubuntu and the installation instructions are written for this. For Windows users, Linux can be run easily using Windows Subsystem for Linux. Installation instructions and more information can be found [here](https://learn.microsoft.com/en-us/windows/wsl/install).
+FE2MS is primarily based on FEniCSx which is available on macOS and Linux. However, installation of this package has only been tested on Ubuntu and the installation instructions are written for this. For Windows users, Linux can be run easily using Windows Subsystem for Linux (WSL). Installation instructions and more information can be found [here](https://learn.microsoft.com/en-us/windows/wsl/install).
 
 The package only has a minimal setup now (without automatic installation of dependencies) and these installation instruction are likely to change in the future.
 Installation using mamba (similar to conda) is recommended. The instructions are as follows.
@@ -39,13 +39,19 @@ cd ~
 git clone https://github.com/Excalibur-SLE/AdaptOctree.git
 pip install --no-deps AdaptOctree/
 ```
+On WSL systems, OpenGL is not installed by default. This is needed by gmsh and needs to be installed. For a fresh WSL installation using Ubuntu, the following will enable OpenGL for gmsh.
+```bash
+sudo apt update
+sudo apt upgrade
+sudo apt install mesa-utils
+```
 
 ### Install DEMCEM
 
 This will build DEMCEM and the necessary pybind11 bindings for it.
 
 ```bash
-mamba install cxx-compiler cmake
+mamba install cxx-compiler make cmake
 
 cd ~
 git clone https://github.com/thanospol/DEMCEM.git
@@ -71,7 +77,7 @@ pip install fe2ms/
 
 ## Demos
 
-There are two demos supplied in the ```demo``` directory of this repository. All of them are possible to run without additional dependencies.
+There are two demos supplied in the ```demo``` directory of this repository. All of them are possible to run without additional dependencies. Note that the first time the code is called, the run time will be longer due to just-in-time compilation.
 
 The first demo ```coated_demo.py``` computes the bistatic RCS for a PEC sphere coated by two layers (air and PLA plastic). It uses a mesh ```coated.msh``` which can be generated fully using gmsh in ```create_mesh_coated.py```.
 
