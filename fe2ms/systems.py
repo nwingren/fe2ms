@@ -42,6 +42,7 @@ from fe2ms.utility import (
     connect_fe_bi_spaces as _connect_fe_bi_spaces
 )
 import fe2ms.assembly as _assembly
+import fe2ms.result_computations as _result_computations
 import fe2ms.preconditioners as _precs
 import fe2ms.bi_space as _bi_space
 
@@ -347,7 +348,77 @@ class FEBISystem:
         return 4 * _np.pi * _np.sum(_np.abs(Efar_sc)**2, axis=1) / amplitude**2
 
 
-    # TODO: Implement near-field computation
+    def compute_near_field(self, x, y, z):
+        """
+        Compute electric near-field in a set of points. Computations are done both in FE and BI
+        regions. Note that field values near the boundary between these regions are inaccurate!
+
+        Parameters
+        ----------
+        x : ndarray
+            x-coordinates of evaluation points.
+        y : nddarray
+            y-coordinates of evaluation points.
+        z : ndarray
+            z-coordinates of evaluation points.
+        
+        Returns
+        -------
+        efield_near : ndarray
+            Electric near-field.
+        """
+
+        if any(sol is None for sol in (self.sol_E, self.sol_H)):
+            raise Exception('No solution computed!')
+
+        points_near = _np.stack((x, y, z), axis=1)
+        efield_near = _np.zeros_like(points_near, dtype=_np.complex128)
+
+        # Trees for finding dolfinx geoemtry
+        bb_tree = _dolfinx.geometry.BoundingBoxTree(self.spaces.fe_space.mesh, 3)
+        midpoint_tree = _dolfinx.geometry.create_midpoint_tree(
+            self.spaces.fe_space.mesh, 3,
+            _np.arange(self.spaces.fe_space.mesh.geometry.dofmap.num_nodes, dtype=_np.int32)
+        )
+
+        # Find which points are in FE and BI regions
+        coll = _dolfinx.geometry.compute_collisions(bb_tree, points_near)
+        prev_offs = 0
+        fe_points = _np.full(points_near.shape[0], False)
+        bi_points = _np.full(points_near.shape[0], True)
+        for i, offs in enumerate(coll.offsets):
+            if offs - prev_offs > 0:
+                fe_points[i] = True
+                bi_points[i] = False
+            prev_offs = offs
+
+        efield_fun_fe = _dolfinx.fem.Function(self.spaces.fe_space)
+        efield_fun_fe.vector[:] = self.sol_E
+        closest_cells = _dolfinx.geometry.compute_closest_entity(
+            bb_tree, midpoint_tree, self.spaces.fe_space.mesh, points_near[fe_points]
+        )
+
+        # Interpolate into Lagrange for proper visualization
+        V0 = _dolfinx.fem.VectorFunctionSpace(self.spaces.fe_space.mesh, ('CG', 1))
+        efield_fun_cg = _dolfinx.fem.Function(V0, dtype=_np.complex128)
+        efield_fun_cg.interpolate(efield_fun_fe)
+        efield_near[fe_points] = efield_fun_cg.eval(points_near[fe_points], closest_cells)
+
+        # Compute scattered near field in BI region
+        if self._formulation == 'vs-efie':
+            sol_E_bound = self.spaces.T_SV @ self.sol_E
+        else:
+            sol_E_bound = self.sol_E[-self.spaces.bi_size:] # pylint: disable=unsubscriptable-object
+        E_sc = _np.zeros_like(points_near[bi_points], dtype=_np.complex128)
+        _result_computations.compute_near_field_bi(
+            self._k0, self.spaces.bi_meshdata.edge2facet, self.spaces.bi_meshdata.facet_areas,
+            self.spaces.bi_basisdata.quad_points, self.spaces.bi_basisdata.quad_weights,
+            self.spaces.bi_basisdata.basis,
+            points_near[bi_points], sol_E_bound, self.sol_H, E_sc
+        )
+        efield_near[bi_points] = E_sc + self._source_fun[0](points_near[bi_points])
+
+        return efield_near
 
     # TODO: Implement sources on the interior of entity?
 
