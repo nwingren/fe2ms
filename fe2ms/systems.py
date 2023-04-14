@@ -607,7 +607,7 @@ class FEBISystemFull(FEBISystem):
 
     def solve_iterative(
         self, solver=None, preconditioner=None, new_prec=False,
-        right_prec=True, return_prec=False, counter=None, solver_tol=1e-3
+        right_prec=True, return_prec=False, counter=None, solver_tol=1e-5
     ):
         """
         Solve system iteratively with preconditioning. Since the FE-BI system
@@ -635,7 +635,7 @@ class FEBISystemFull(FEBISystem):
             Callback function to scipy iterative solver, by default None. Note that different
             solvers call this differently. For more info, see scipy documentation.
         solver_tol : float, optional
-            (Relative) tolerance of iterative solver, by default 1e-3.
+            (Relative) tolerance of iterative solver, by default 1e-5.
 
         Returns
         -------
@@ -842,7 +842,7 @@ class FEBISystemACA(FEBISystem):
 
     def solve_iterative(
         self, solver=None, preconditioner=None, new_prec=False,
-        right_prec=True, return_prec=False, counter=None, solver_tol=1e-3
+        right_prec=True, return_prec=False, counter=None, solver_tol=1e-5
     ):
         """
         Solve system iteratively with preconditioning. Since the FE-BI system is highly
@@ -870,7 +870,7 @@ class FEBISystemACA(FEBISystem):
             Callback function to scipy iterative solver, by default None. Note that different
             solvers call this differently. For more info, see scipy documentation.
         solver_tol : float, optional
-            (Relative) tolerance of iterative solver, by default 1e-3.
+            (Relative) tolerance of iterative solver, by default 1e-5.
 
         Returns
         -------
