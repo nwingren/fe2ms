@@ -439,7 +439,7 @@ class FEBISystemFull(FEBISystem):
         self._system_lufactor = None
 
 
-    def assemble(self, compute_lu=False, save_file=None):
+    def assemble(self, compute_lu=False, save_file=None, quad_order_singular=5):
         """
         Assemble system as defined by computational volume with full block structure.
         Will build function spaces and connections if not already done. For direct solutions,
@@ -459,6 +459,8 @@ class FEBISystemFull(FEBISystem):
             If the file exists with a correct identifier, system blocks are loaded.
             If the file does not exist, system blocks will be saved to it after
             assembly.
+        quad_order_singular : int, optional
+            Quadrature order to use in DEMCEM singular integral computations, by default 5.
         """
 
         identifier = 'FEBISystemFull-KBPQb_blocks'
@@ -496,7 +498,8 @@ class FEBISystemFull(FEBISystem):
 
             # Boundary integral matrices
             P_matrix, Q_matrix, self.K_prec, self.L_prec = _assembly.assemble_bi_blocks_full(
-                self._formulation, self._k0, self.spaces.bi_meshdata, self.spaces.bi_basisdata
+                self._formulation, self._k0, self.spaces.bi_meshdata, self.spaces.bi_basisdata,
+                quad_order_singular
             )
 
             # Save block data
@@ -793,7 +796,8 @@ class FEBISystemACA(FEBISystem):
 
 
     def assemble(
-        self, target_points=None, recompress=True, tolerance=1e-3
+        self, recompress=True, target_points=None, max_points=None, max_level=16, tolerance=1e-3,
+        quad_order_singular=5
     ):
         """
         Assemble system using a multilevel ACA for the BI blocks. An octree is generated for this
@@ -802,13 +806,20 @@ class FEBISystemACA(FEBISystem):
 
         Parameters
         ----------
+        recompress : bool, optional
+            Whether to recompress ACA blocks using QR and SVD, by default True.
         target_points : int, optional
             Target for the mean number of points per group, by default None. The default will set
             this to the square root of the number of BI DoFs.
+        max_points : int, optional
+            Maximum number of points per groups, by default None. This will override the iteration
+            for obtaining mean number of points per groups.
+        max_level : int, optional
+            Maximum level for octree, by default 16.
         tolerance : float, optional
-            Error tolerance determining termination of the ACA, by default 1e-3.
-        recompress : bool, optional
-            Whether to recompress ACA matrices using QR+SVD using same tolerance, dy default True.
+            Tolerance for the ACA and recompression SVD, by default 1e-3.
+        quad_order_singular : int, optional
+            Quadrature order to use in DEMCEM singular integral computations, by default 5.
         """
 
         # Build function spaces if not already done
@@ -824,8 +835,8 @@ class FEBISystemACA(FEBISystem):
         # Boundary integral blocks
         P_near, Q_near, far_operator, self.K_prec, self.L_prec = _assembly.assemble_bi_aca(
             self._formulation, self._k0, self.spaces.bi_meshdata,
-            self.spaces.bi_basisdata, recompress=recompress, target_points=target_points,
-            tolerance=tolerance
+            self.spaces.bi_basisdata, recompress, target_points, max_points, max_level, tolerance,
+            quad_order_singular
         )
 
         self._system_blocks = _FEBIBlocks(K_matrix, B_matrix, P_near, Q_near)

@@ -116,7 +116,7 @@ def assemble_KB_blocks(
 
 def assemble_bi_blocks_full(
     formulation, k0, meshdata: _bi_space.BIMeshData, basisdata: _bi_space.BIBasisData,
-    quad_order_singular=5
+    quad_order_singular
 ):
     """
     Assemble full BI blocks for tested K- and L-operators. This uses edge-wise assembly as opposed
@@ -136,8 +136,8 @@ def assemble_bi_blocks_full(
         Function describing an incident electric field. Both its input and output should be ndarray
         with shape (n, 3) where n is an arbitrary number of evaluation points. None as input is
         interpreted as no external incident field.
-    quad_order_singular : int, optional
-        Quadrature order to use in DEMCEM singular integral computations, by default 5.
+    quad_order_singular : int
+        Quadrature order to use in DEMCEM singular integral computations.
 
     Returns
     -------
@@ -179,8 +179,7 @@ def assemble_bi_blocks_full(
 
 def assemble_bi_aca(
     formulation, k0, meshdata: _bi_space.BIMeshData, basisdata: _bi_space.BIBasisData,
-    recompress=True, target_points=None, max_points=None, max_level=16, tolerance=1e-3,
-    quad_order_singular=5
+    recompress, target_points, max_points, max_level, tolerance, quad_order_singular
 ):
     """
     Assemble BI blocks using the adaptive cross approximation (ACA). Uses AdaptOctree to subdivide
@@ -198,20 +197,20 @@ def assemble_bi_aca(
         Mesh data for the BI problem.
     basisdata : febicode.rwg_rt_helpers.BIBasisData
         Basis data for the BI problem.
-    recompress : bool, optional
-        Whether to recompress ACA blocks using QR and SVD, by default True.
-    target_points : int, optional
-        Target for the mean number of points per group, by default None. The default will set this
-        to the square root of the number of BI DoFs.
-    max_points : int, optional
-        Maximum number of points per groups, by default None. This will override the iteration for
+    recompress : bool
+        Whether to recompress ACA blocks using QR and SVD.
+    target_points : int
+        Target for the mean number of points per group. 'None' will set this to the square root of
+        the number of BI DoFs.
+    max_points : int
+        Maximum number of points per groups. If not 'None', this will override the iteration for
         obtaining mean number of points per grous.
-    max_level : int, optional
-        Maximum level for octree, by default 16.
-    tolerance : _type_, optional
-        Tolerance for the ACA and recompression SVD, by default 1e-3.
-    quad_order_singular : int, optional
-        Quadrature order to use in DEMCEM singular integral computations, by default 5.
+    max_level : int
+        Maximum level for octree.
+    tolerance : float
+        Tolerance for the ACA and recompression SVD.
+    quad_order_singular : int
+        Quadrature order to use in DEMCEM singular integral computations.
 
     Returns
     -------
@@ -452,7 +451,8 @@ def _compute_singularities_KL_operators(
             f = meshdata.edge2facet[e] == facet_P
             signs_m[i] = meshdata.edge_facet_signs[e, f][0]
 
-            for e_n in edges_m:
+            # Only get non self combinations (self term is identically zero)
+            for e_n in edges_m[i+1:]:
                 f_n = meshdata.edge2facet[e_n] == facet_P
                 cross_product = _np.cross(normal_P, basisdata.basis[e_n, f_n])
                 if on_interior:
@@ -463,6 +463,15 @@ def _compute_singularities_KL_operators(
                     basisdata.basis[e, f] * cross_product *
                     basisdata.quad_weights.reshape(-1, 1)
                 ) * J_P)
+                if gen_preconditioner:
+                    Kp_rows.append(K_rows[-1])
+                    Kp_cols.append(K_cols[-1])
+                    Kp_vals.append(K_vals[-1])
+
+                # Add skew symmetric part
+                K_rows.append(e_n)
+                K_cols.append(e)
+                K_vals.append(-K_vals[-1])
                 if gen_preconditioner:
                     Kp_rows.append(K_rows[-1])
                     Kp_cols.append(K_cols[-1])
