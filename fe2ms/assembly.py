@@ -417,7 +417,7 @@ def _compute_singularities_KL_operators(
         value_type=_nb.core.types.boolean
     )
 
-    adjacent_facets = set()
+    facetpairs_done = set()
 
     if gen_preconditioner:
         Kp_rows = []
@@ -492,15 +492,17 @@ def _compute_singularities_KL_operators(
         for i in range(9):
             singular_entries[(edges_m[i // 3], edges_m[i % 3])] = True
 
-        complete_facets = {facet_P}
-
         # Find all EA facets (remove self facet)
         # ea_facets is ordered the same way as edges_m
         ea_facets = meshdata.edge2facet[edges_m]
         ea_facets = ea_facets[ea_facets != facet_P]
         for e_local, facet_Q in enumerate(ea_facets):
 
-            adjacent_facets.add((max(facet_P, facet_Q), min(facet_P, facet_Q)))
+            # Each facet pair is only done once due to symmetry
+            if (max(facet_P, facet_Q), min(facet_P, facet_Q)) in facetpairs_done:
+                continue
+
+            facetpairs_done.add((max(facet_P, facet_Q), min(facet_P, facet_Q)))
 
             # Verts in facet P are cyclically permuted according to the edge local index in facet P
             local_roll_P = _np.roll(_np.arange(3), 2-e_local)
@@ -524,13 +526,16 @@ def _compute_singularities_KL_operators(
             signs_n_adj = _np.empty((3,), dtype=_np.int32)
             for i, e in enumerate(edges_n_adj):
                 signs_n_adj[i] = meshdata.edge_facet_signs[e, meshdata.edge2facet[e] == facet_Q][0]
+            
+            rows = [edges_m_adj[i // 3] for i in range(9)]
+            cols = [edges_n_adj[i % 3] for i in range(9)]
 
             _demcem_bindings.ws_ea_rwg(
                 r_coords_adj[0], r_coords_adj[1], r_coords_adj[2], r4, k0,
                 N_quad, N_quad, sing_vals
             )
-            L_rows += [edges_m_adj[i // 3] for i in range(9)]
-            L_cols += [edges_n_adj[i % 3] for i in range(9)]
+            L_rows += rows
+            L_cols += cols
             L_vals += [
                 sing_vals[i] / 4 / _np.pi * signs_m_adj[i // 3] * signs_n_adj[i % 3]
                 / meshdata.edge_lengths[edges_m_adj[i // 3]]
@@ -538,32 +543,42 @@ def _compute_singularities_KL_operators(
                 for i in range(9)
             ]
 
+            # Symmetric part
+            L_rows += cols
+            L_cols += rows
+            L_vals += L_vals[-9:]
+
             _demcem_bindings.ss_ea_rwg(
                 r_coords_adj[0], r_coords_adj[1], r_coords_adj[2], r4, k0,
                 N_quad, N_quad, sing_vals
             )
-            K_rows += [edges_m_adj[i // 3] for i in range(9)]
-            K_cols += [edges_n_adj[i % 3] for i in range(9)]
+            K_rows += rows
+            K_cols += cols
             K_vals += [
                 - sing_vals[i] / 4 / _np.pi * signs_m_adj[i // 3] * signs_n_adj[i % 3]
                 / meshdata.edge_lengths[edges_m_adj[i // 3]]
                 / meshdata.edge_lengths[edges_n_adj[i % 3]]
                 for i in range(9)
             ]
+
+            # Symmetric part
+            K_rows += cols
+            K_cols += rows
+            K_vals += K_vals[-9:]
             
             for i in range(9):
                 singular_entries[(edges_m_adj[i // 3], edges_n_adj[i % 3])] = True
-
-        complete_facets.update(set(ea_facets))
+                singular_entries[(edges_n_adj[i % 3], edges_m_adj[i // 3])] = True
 
         # Find all VA facets
         for v in verts_P:
             for facet_Q in vert2facet.links(v):
 
-                if facet_Q in complete_facets:
+                # Each facet pair is only done once due to symmetry
+                if (max(facet_P, facet_Q), min(facet_P, facet_Q)) in facetpairs_done:
                     continue
 
-                adjacent_facets.add((max(facet_P, facet_Q), min(facet_P, facet_Q)))
+                facetpairs_done.add((max(facet_P, facet_Q), min(facet_P, facet_Q)))
 
                 # Verts in facet P are permuted according to the local index of connon vert
                 v_loc_P = _np.where(verts_P == v)[0][0]
@@ -590,12 +605,15 @@ def _compute_singularities_KL_operators(
                 for i, e in enumerate(edges_n_adj):
                     signs_n_adj[i] = meshdata.edge_facet_signs[e, meshdata.edge2facet[e] == facet_Q][0]
 
+                rows = [edges_m_adj[i // 3] for i in range(9)]
+                cols = [edges_n_adj[i % 3] for i in range(9)]
+
                 _demcem_bindings.ws_va_rwg(
                     r_coords_adj[0], r_coords_adj[1], r_coords_adj[2], r4, r5, k0,
                     N_quad, N_quad, N_quad, sing_vals
                 )
-                L_rows += [edges_m_adj[i // 3] for i in range(9)]
-                L_cols += [edges_n_adj[i % 3] for i in range(9)]
+                L_rows += rows
+                L_cols += cols
                 L_vals += [
                     sing_vals[i] / 4 / _np.pi * signs_m_adj[i // 3] * signs_n_adj[i % 3]
                     / meshdata.edge_lengths[edges_m_adj[i // 3]]
@@ -603,12 +621,17 @@ def _compute_singularities_KL_operators(
                     for i in range(9)
                 ]
 
+                # Symmetric part
+                L_rows += cols
+                L_cols += rows
+                L_vals += L_vals[-9:]
+
                 _demcem_bindings.ss_va_rwg(
                     r_coords_adj[0], r_coords_adj[1], r_coords_adj[2], r4, r5, k0,
                     N_quad, N_quad, N_quad, sing_vals
                 )
-                K_rows += [edges_m_adj[i // 3] for i in range(9)]
-                K_cols += [edges_n_adj[i % 3] for i in range(9)]
+                K_rows += rows
+                K_cols += cols
                 K_vals += [
                     - sing_vals[i] / 4 / _np.pi * signs_m_adj[i // 3] * signs_n_adj[i % 3]
                     / meshdata.edge_lengths[edges_m_adj[i // 3]]
@@ -616,8 +639,14 @@ def _compute_singularities_KL_operators(
                     for i in range(9)
                 ]
 
+                # Symmetric part
+                K_rows += cols
+                K_cols += rows
+                K_vals += K_vals[-9:]
+
                 for i in range(9):
                     singular_entries[(edges_m_adj[i // 3], edges_n_adj[i % 3])] = True
+                    singular_entries[(edges_n_adj[i % 3], edges_m_adj[i // 3])] = True
 
     # Compute "leftover" elements included in terms containing singularity but which corresponds to
     # facets neither ST, EA or VA. The method is not very optimized, but should at least not be
@@ -627,24 +656,22 @@ def _compute_singularities_KL_operators(
         for i_facet_m, facet_m in enumerate(meshdata.edge2facet[edge_m]):
             for i_facet_n, facet_n in enumerate(meshdata.edge2facet[edge_n]):
 
-                # Edge/vertex adjacent facets are already computed
-                if (max(facet_m, facet_n), min(facet_m, facet_n)) in adjacent_facets:
+                # Edge/vertex adjacent facets and self-facets are already computed
+                if (max(facet_m, facet_n), min(facet_m, facet_n)) in facetpairs_done:
                     continue
 
-                if facet_m != facet_n:
+                K_contrib, L_contrib = _assembly_full.facet_contrib_KL_operators(
+                    k0, basisdata.basis, basisdata.divs, basisdata.quad_points,
+                    basisdata.quad_weights, meshdata.edge2facet, meshdata.facet_areas,
+                    edge_m, edge_n, i_facet_m, i_facet_n
+                )
+                K_rows.append(edge_m)
+                K_cols.append(edge_n)
+                K_vals.append(K_contrib)
 
-                    K_contrib, L_contrib = _assembly_full.facet_contrib_KL_operators(
-                        k0, basisdata.basis, basisdata.divs, basisdata.quad_points,
-                        basisdata.quad_weights, meshdata.edge2facet, meshdata.facet_areas,
-                        edge_m, edge_n, i_facet_m, i_facet_n
-                    )
-                    K_rows.append(edge_m)
-                    K_cols.append(edge_n)
-                    K_vals.append(K_contrib)
-
-                    L_rows.append(edge_m)
-                    L_cols.append(edge_n)
-                    L_vals.append(L_contrib)
+                L_rows.append(edge_m)
+                L_cols.append(edge_n)
+                L_vals.append(L_contrib)
     
     K_singular = _sparse.coo_array(
         (_np.array(K_vals), (_np.array(K_rows), _np.array(K_cols))), shape=(num_edges, num_edges)
