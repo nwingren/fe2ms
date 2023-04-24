@@ -44,7 +44,7 @@ class BIMeshData:
         bi_mesh.topology.create_connectivity(2,1)
         self.facet2edge = bi_mesh.topology.connectivity(2,1).array.reshape((-1,3))
 
-        self.facet_normals, self.facet_areas = _get_boundary_facet_info(
+        self.facet_normals, self.facet_areas, self.facet_flips = _get_boundary_facet_info(
             fe_space, self.vert_coords, self.edge2vert, self.facet2edge, self.facet2vert,
             bi_to_fe_facets, ext_facets
         )
@@ -163,7 +163,7 @@ def _get_boundary_facet_info(
     )
     normals *= flips
 
-    return normals, areas
+    return normals, areas, flips.ravel()
 
 
 def _get_facet_signs(bi_meshdata):

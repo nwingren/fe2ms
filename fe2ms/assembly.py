@@ -506,6 +506,8 @@ def _compute_singularities_KL_operators(
 
             # Verts in facet P are cyclically permuted according to the edge local index in facet P
             local_roll_P = _np.roll(_np.arange(3), 2-e_local)
+            if meshdata.facet_flips[facet_P] == -1:
+                local_roll_P[[0, 1]] = local_roll_P[[1, 0]]
             edges_m_adj = edges_m[local_roll_P]
 
             verts_Q = meshdata.facet2vert[facet_Q]
@@ -580,9 +582,11 @@ def _compute_singularities_KL_operators(
 
                 facetpairs_done.add((max(facet_P, facet_Q), min(facet_P, facet_Q)))
 
-                # Verts in facet P are permuted according to the local index of connon vert
+                # Verts in facet P are permuted according to the local index of common vert
                 v_loc_P = _np.where(verts_P == v)[0][0]
                 local_roll_P = _np.roll(_np.arange(3), -v_loc_P)
+                if meshdata.facet_flips[facet_P] == -1:
+                    local_roll_P[[1, 2]] = local_roll_P[[2, 1]]
                 edges_m_adj = edges_m[local_roll_P]
 
                 verts_Q = meshdata.facet2vert[facet_Q]
@@ -592,7 +596,8 @@ def _compute_singularities_KL_operators(
                 verts_Q = meshdata.facet2vert[facet_Q]
                 v_loc_Q = _np.where(verts_Q == v)[0][0]
                 local_roll_Q = _np.roll(_np.arange(3), -v_loc_Q)
-                local_roll_Q[[1, 2]] = local_roll_Q[[2, 1]]
+                if meshdata.facet_flips[facet_Q] == 1:
+                    local_roll_Q[[1, 2]] = local_roll_Q[[2, 1]]
                 edges_n_adj = edges_n[local_roll_Q]
 
                 r_coords_adj = r_coords[local_roll_P]
