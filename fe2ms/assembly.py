@@ -532,10 +532,18 @@ def _compute_singularities_KL_operators(
             rows = [edges_m_adj[i // 3] for i in range(9)]
             cols = [edges_n_adj[i % 3] for i in range(9)]
 
-            _demcem_bindings.ws_ea_rwg(
-                r_coords_adj[0], r_coords_adj[1], r_coords_adj[2], r4, k0,
-                N_quad, N_quad, sing_vals
-            )
+            # _demcem_bindings.ws_ea_rwg(
+            #     r_coords_adj[0], r_coords_adj[1], r_coords_adj[2], r4, k0,
+            #     N_quad, N_quad, sing_vals
+            # )
+            for edge_m in edges_m:
+                for edge_n in edges_n:
+                    i_facet_m = _np.where()
+                    L_contrib = _assembly_full.facet_contrib_KL_operators(
+                        k0, basisdata.basis, basisdata.divs, basisdata.quad_points,
+                        basisdata.quad_weights, meshdata.edge2facet, meshdata.facet_areas,
+                        edge_m, edge_n, i_facet_m, i_facet_n
+                    )[1]
             L_rows += rows
             L_cols += cols
             L_vals += [
