@@ -383,17 +383,25 @@ class FEBISystem:
 
         # Find which points are in FE and BI regions
         coll = _dolfinx.geometry.compute_collisions(bb_tree, points_near)
-        prev_offs = 0
+        coll_cells = _dolfinx.geometry.compute_colliding_cells(
+            self.spaces.fe_space.mesh, coll, points_near
+        )
         fe_points = _np.full(points_near.shape[0], False)
         bi_points = _np.full(points_near.shape[0], True)
-        for i, offs in enumerate(coll.offsets):
-            if offs - prev_offs > 0:
+        for i in range(coll_cells.num_nodes):
+            if coll_cells.links(i).size > 0:
                 fe_points[i] = True
                 bi_points[i] = False
-            prev_offs = offs
 
         efield_fun_fe = _dolfinx.fem.Function(self.spaces.fe_space)
-        efield_fun_fe.vector[:] = self.sol_E
+        if self._formulation == 'vs-efie':
+            efield_fun_fe.vector[:] = self.sol_E
+        else:
+            in_size = self.spaces.fe_size - self.spaces.bi_size
+            vec_vs = _np.zeros_like(self.sol_E)
+            vec_vs += self.spaces.T_VI @ self.sol_E[:in_size] # pylint: disable=unsubscriptable-object
+            vec_vs += self.spaces.T_VS @ self.sol_E[in_size:] # pylint: disable=unsubscriptable-object
+            efield_fun_fe.vector[:] = vec_vs
         closest_cells = _dolfinx.geometry.compute_closest_entity(
             bb_tree, midpoint_tree, self.spaces.fe_space.mesh, points_near[fe_points]
         )
