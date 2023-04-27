@@ -133,10 +133,6 @@ def assemble_bi_blocks_full(
         Mesh data for the BI problem.
     basisdata : febicode.rwg_rt_helpers.BIBasisData
         Basis data for the BI problem.
-    Einc_fun : function
-        Function describing an incident electric field. Both its input and output should be ndarray
-        with shape (n, 3) where n is an arbitrary number of evaluation points. None as input is
-        interpreted as no external incident field.
     quad_order_singular : int
         Quadrature order to use in DEMCEM singular integral computations.
 
@@ -438,13 +434,9 @@ def _compute_singularities_KL_operators(
     # Compute self-terms
     for facet_P, verts_P in enumerate(meshdata.facet2vert):
 
-        edges_m = meshdata.facet2edge[facet_P]
+        facetpairs_done.add((facet_P, facet_P))
 
-        sing_vals = _np.zeros(9, dtype=_np.complex128)
-        r_coords = meshdata.vert_coords[verts_P]
-        _demcem_bindings.ws_st_rwg(
-            r_coords[0], r_coords[1], r_coords[2], k0, N_quad, sing_vals
-        )
+        edges_m = meshdata.facet2edge[facet_P]
 
         # Find signs of RWG corresponding to edge_m in facet_P
         # Also add term from nxK to the P values (sign depends on in/outside of volume)
@@ -480,6 +472,12 @@ def _compute_singularities_KL_operators(
                     Kp_rows.append(K_rows[-1])
                     Kp_cols.append(K_cols[-1])
                     Kp_vals.append(K_vals[-1])
+        
+        sing_vals = _np.zeros(9, dtype=_np.complex128)
+        r_coords = meshdata.vert_coords[verts_P]
+        _demcem_bindings.ws_st_rwg(
+            r_coords[0], r_coords[1], r_coords[2], k0, N_quad, sing_vals
+        )
 
         L_rows += [edges_m[i // 3] for i in range(9)]
         L_cols += [edges_m[i % 3] for i in range(9)]
@@ -537,18 +535,30 @@ def _compute_singularities_KL_operators(
             cols = [edges_n_adj[i % 3] for i in range(9)]
 
             # TODO: Improve performance here
-            for edge_m in rows:
-                for edge_n in cols:
-                    i_facet_m = _np.where(meshdata.edge2facet[edge_m] == facet_P)[0][0]
-                    i_facet_n = _np.where(meshdata.edge2facet[edge_n] == facet_Q)[0][0]
-                    L_contrib = _assembly_full.facet_contrib_KL_operators(
-                        k0, basisdata_fine.basis, basisdata_fine.divs, basisdata_fine.quad_points,
-                        basisdata_fine.quad_weights, meshdata.edge2facet, meshdata.facet_areas,
-                        edge_m, edge_n, i_facet_m, i_facet_n
-                    )[1]
-                    L_rows.append(edge_m)
-                    L_cols.append(edge_n)
-                    L_vals.append(L_contrib)
+            for edge_m, edge_n in zip(rows, cols):
+                i_facet_m = _np.where(meshdata.edge2facet[edge_m] == facet_P)[0][0]
+                i_facet_n = _np.where(meshdata.edge2facet[edge_n] == facet_Q)[0][0]
+                L_contrib = _assembly_full.facet_contrib_KL_operators(
+                    k0, basisdata_fine.basis, basisdata_fine.divs, basisdata_fine.quad_points,
+                    basisdata_fine.quad_weights, meshdata.edge2facet, meshdata.facet_areas,
+                    edge_m, edge_n, i_facet_m, i_facet_n
+                )[1]
+                L_rows.append(edge_m)
+                L_cols.append(edge_n)
+                L_vals.append(L_contrib)
+
+            # _demcem_bindings.ws_ea_rwg(
+            #     r_coords_adj[0], r_coords_adj[1], r_coords_adj[2], r4, k0,
+            #     N_quad, N_quad, sing_vals
+            # )
+            # L_rows += rows
+            # L_cols += cols
+            # L_vals += [
+            #     sing_vals[i] / 4 / _np.pi * signs_m_adj[i // 3] * signs_n_adj[i % 3]
+            #     / meshdata.edge_lengths[edges_m_adj[i // 3]]
+            #     / meshdata.edge_lengths[edges_n_adj[i % 3]]
+            #     for i in range(9)
+            # ]
 
             # Symmetric part
             L_rows += cols
@@ -572,7 +582,7 @@ def _compute_singularities_KL_operators(
             K_rows += cols
             K_cols += rows
             K_vals += K_vals[-9:]
-            
+
             for i in range(9):
                 singular_entries[(edges_m_adj[i // 3], edges_n_adj[i % 3])] = True
                 singular_entries[(edges_n_adj[i % 3], edges_m_adj[i // 3])] = True
