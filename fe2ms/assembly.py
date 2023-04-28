@@ -428,9 +428,6 @@ def _compute_singularities_KL_operators(
     meshdata.mesh.topology.create_connectivity(0, 2)
     vert2facet = meshdata.mesh.topology.connectivity(0, 2)
 
-    # More quadrature points for basis used in WS EA case (15 point rule)
-    basisdata_fine = _bi_space.BIBasisData(meshdata, quad_order=7)
-
     # Compute self-terms
     for facet_P, verts_P in enumerate(meshdata.facet2vert):
 
@@ -440,6 +437,7 @@ def _compute_singularities_KL_operators(
 
         # Find signs of RWG corresponding to edge_m in facet_P
         # Also add term from nxK to the P values (sign depends on in/outside of volume)
+        # TODO: This P part could be done using numba'd _assembly_full.assemble_B instead
         signs_m = _np.empty((3,), dtype=_np.int32)
         normal_P = meshdata.facet_normals[facet_P]
         J_P = 2 * meshdata.facet_areas[facet_P]
@@ -534,31 +532,18 @@ def _compute_singularities_KL_operators(
             rows = [edges_m_adj[i // 3] for i in range(9)]
             cols = [edges_n_adj[i % 3] for i in range(9)]
 
-            # TODO: Improve performance here
-            for edge_m, edge_n in zip(rows, cols):
-                i_facet_m = _np.where(meshdata.edge2facet[edge_m] == facet_P)[0][0]
-                i_facet_n = _np.where(meshdata.edge2facet[edge_n] == facet_Q)[0][0]
-                L_contrib = _assembly_full.facet_contrib_KL_operators(
-                    k0, basisdata_fine.basis, basisdata_fine.divs, basisdata_fine.quad_points,
-                    basisdata_fine.quad_weights, meshdata.edge2facet, meshdata.facet_areas,
-                    edge_m, edge_n, i_facet_m, i_facet_n
-                )[1]
-                L_rows.append(edge_m)
-                L_cols.append(edge_n)
-                L_vals.append(L_contrib)
-
-            # _demcem_bindings.ws_ea_rwg(
-            #     r_coords_adj[0], r_coords_adj[1], r_coords_adj[2], r4, k0,
-            #     N_quad, N_quad, sing_vals
-            # )
-            # L_rows += rows
-            # L_cols += cols
-            # L_vals += [
-            #     sing_vals[i] / 4 / _np.pi * signs_m_adj[i // 3] * signs_n_adj[i % 3]
-            #     / meshdata.edge_lengths[edges_m_adj[i // 3]]
-            #     / meshdata.edge_lengths[edges_n_adj[i % 3]]
-            #     for i in range(9)
-            # ]
+            _demcem_bindings.ws_ea_rwg(
+                r_coords_adj[0], r_coords_adj[1], r_coords_adj[2], r4, k0,
+                N_quad, N_quad, sing_vals
+            )
+            L_rows += rows
+            L_cols += cols
+            L_vals += [
+                sing_vals[i] / 4 / _np.pi * signs_m_adj[i // 3] * signs_n_adj[i % 3]
+                / meshdata.edge_lengths[edges_m_adj[i // 3]]
+                / meshdata.edge_lengths[edges_n_adj[i % 3]]
+                for i in range(9)
+            ]
 
             # Symmetric part
             L_rows += cols
