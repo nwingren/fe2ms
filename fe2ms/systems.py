@@ -251,7 +251,6 @@ class FEBISystem:
             self._rhs = _np.concatenate((_np.zeros(self.spaces.fe_size - self.spaces.bi_size), b_inc))
     
 
-    # TODO: Numba this!
     # TODO: Add cartesian coordinate version of this (and of rcs)
     def compute_far_field(
         self, r, theta, phi, total_field=False
@@ -285,38 +284,20 @@ class FEBISystem:
             axis=1
         )
 
-        surf_integral = _np.zeros(unit_points.shape, dtype=_np.complex128)
         meshdata = self.spaces.bi_meshdata
+        basisdata = self.spaces.bi_basisdata
 
         if self._formulation == 'vs-efie':
             sol_E_bound = self.spaces.T_SV @ self.sol_E
         else:
             sol_E_bound = self.sol_E[-self.spaces.bi_size:] # pylint: disable=unsubscriptable-object
 
-        for edge_m in range(self.spaces.bi_size):
-
-            for i_facet_m, facet_m in enumerate(meshdata.edge2facet[edge_m]):
-
-                # Jacobian norm for integral m
-                J_m = 2 * meshdata.facet_areas[facet_m]
-
-                quad_points_phys = self.spaces.bi_basisdata.quad_points[facet_m]
-                basis_eval = self.spaces.bi_basisdata.basis[edge_m, i_facet_m]
-
-                # No multiplication by eta0 since the solH coeffs are already scaled by that
-                rhat = _np.repeat(unit_points[None,:,:], quad_points_phys.shape[0], axis=0)
-                scalar_product = _np.sum(rhat * quad_points_phys[:,None,:], axis=2, keepdims=True)
-                cross_prod_M = _np.complex128(_np.cross(rhat, basis_eval[:,None,:]))
-                cross_prod_J = _np.complex128(_np.cross(rhat, cross_prod_M))
-                cross_prod_M *= -sol_E_bound[edge_m] # pylint: disable=unsubscriptable-object
-                cross_prod_J *= self.sol_H[edge_m] # pylint: disable=unsubscriptable-object
-                surf_integral += _np.sum(
-                    (cross_prod_M + cross_prod_J) * self.spaces.bi_basisdata.quad_weights[:,None,None]
-                    * _np.exp(1j * self._k0 * scalar_product),
-                    axis=0
-                ) * J_m
-
-        Efar = 1j *self._k0 * _np.exp(-1j * self._k0 * r) / 4 / _np.pi / r * surf_integral
+        Efar = _np.zeros_like(unit_points, dtype=_np.complex128)
+        _result_computations.compute_far_field_integral(
+            self._k0, meshdata.edge2facet, meshdata.facet_areas, basisdata.quad_points,
+            basisdata.quad_weights, basisdata.basis, unit_points, sol_E_bound, self.sol_H, Efar
+        )
+        Efar *= 1j *self._k0 * _np.exp(-1j * self._k0 * r) / 4 / _np.pi / r
 
         if total_field:
             Efar += self._source_fun[0](r*unit_points)

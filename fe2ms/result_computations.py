@@ -69,3 +69,48 @@ def compute_near_field_bi(
                     ) * J_m
 
     E_sc *= -1j * k0
+
+
+@_nb.jit(nopython=True, fastmath=True, error_model='numpy', parallel=True)
+def compute_far_field_integral(
+    k0, edge2facet, facet_areas, quad_points, quad_weights, basis,
+    unit_points, sol_E_bound, sol_H, Efar
+):
+    for i_point in _nb.prange(unit_points.shape[0]): # pylint: disable=not-an-iterable
+        for edge_m in range(edge2facet.shape[0]):
+
+            for i_facet_m in range(edge2facet.shape[1]):
+
+                # Jacobian norm for integral m
+                J_m = 2 * facet_areas[edge2facet[edge_m, i_facet_m]]
+
+                # No multiplication by eta0 since the solH coeffs are already scaled by that
+                for i_quad in range(quad_points.shape[1]):
+                    basis_eval = basis[edge_m, i_facet_m, i_quad]
+                    scalar_prod = 0.
+                    cross_prod_M = _np.empty(3, dtype=_np.complex128)
+                    cross_prod_J = _np.empty(3, dtype=_np.complex128)
+
+                    for i_coord in range(3):
+                        cross_prod_M[i_coord] = (
+                            unit_points[i_point, (i_coord+1)%3] * basis_eval[(i_coord-1)%3]
+                            - unit_points[i_point, (i_coord-1)%3] * basis_eval[(i_coord+1)%3]
+                        )
+                        scalar_prod += (
+                            unit_points[i_point, i_coord]
+                            * quad_points[edge2facet[edge_m, i_facet_m], i_quad, i_coord]
+                        )
+
+                    for i_coord in range(3):
+                        cross_prod_J[i_coord] = (
+                            unit_points[i_point, (i_coord+1)%3] * cross_prod_M[(i_coord-1)%3]
+                            - unit_points[i_point, (i_coord-1)%3] * cross_prod_M[(i_coord+1)%3]
+                        )
+
+                    cross_prod_J *= sol_H[edge_m]
+                    cross_prod_M *= -sol_E_bound[edge_m]
+
+                    Efar[i_point] += (
+                        (cross_prod_J + cross_prod_M) * _np.exp(1j * k0 * scalar_prod)
+                        * quad_weights[i_quad] * J_m
+                    )
