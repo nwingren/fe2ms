@@ -436,41 +436,10 @@ def _compute_singularities_KL_operators(
         edges_m = meshdata.facet2edge[facet_P]
 
         # Find signs of RWG corresponding to edge_m in facet_P
-        # Also add term from nxK to the P values (sign depends on in/outside of volume)
-        # TODO: This P part could be done using numba'd _assembly_full.assemble_B instead
         signs_m = _np.empty((3,), dtype=_np.int32)
-        normal_P = meshdata.facet_normals[facet_P]
-        J_P = 2 * meshdata.facet_areas[facet_P]
         for i, e in enumerate(edges_m):
-            f = meshdata.edge2facet[e] == facet_P
-            signs_m[i] = meshdata.edge_facet_signs[e, f][0]
+            signs_m[i] = meshdata.edge_facet_signs[e, meshdata.edge2facet[e] == facet_P][0]
 
-            # Only get non self combinations (self term is identically zero)
-            for e_n in edges_m[i+1:]:
-                f_n = meshdata.edge2facet[e_n] == facet_P
-                cross_product = _np.cross(normal_P, basisdata.basis[e_n, f_n])
-                if on_interior:
-                    cross_product *= -1
-                K_rows.append(e)
-                K_cols.append(e_n)
-                K_vals.append(-0.5 * _np.sum(
-                    basisdata.basis[e, f] * cross_product *
-                    basisdata.quad_weights.reshape(-1, 1)
-                ) * J_P)
-                if gen_preconditioner:
-                    Kp_rows.append(K_rows[-1])
-                    Kp_cols.append(K_cols[-1])
-                    Kp_vals.append(K_vals[-1])
-
-                # Add skew symmetric part
-                K_rows.append(e_n)
-                K_cols.append(e)
-                K_vals.append(-K_vals[-1])
-                if gen_preconditioner:
-                    Kp_rows.append(K_rows[-1])
-                    Kp_cols.append(K_cols[-1])
-                    Kp_vals.append(K_vals[-1])
-        
         sing_vals = _np.zeros(9, dtype=_np.complex128)
         r_coords = meshdata.vert_coords[verts_P]
         _demcem_bindings.ws_st_rwg(
@@ -528,7 +497,7 @@ def _compute_singularities_KL_operators(
             signs_n_adj = _np.empty((3,), dtype=_np.int32)
             for i, e in enumerate(edges_n_adj):
                 signs_n_adj[i] = meshdata.edge_facet_signs[e, meshdata.edge2facet[e] == facet_Q][0]
-            
+
             rows = [edges_m_adj[i // 3] for i in range(9)]
             cols = [edges_n_adj[i % 3] for i in range(9)]
 
@@ -678,7 +647,21 @@ def _compute_singularities_KL_operators(
                 L_cols.append(edge_n)
                 L_vals.append(L_contrib)
     
-    K_singular = _sparse.coo_array(
+    # Compute self-facet terms for the K operator using the Numba assembly for the B matrix block
+    B_rows, B_cols, B_vals = _assembly_full.assemble_B(
+        k0, basisdata.basis, basisdata.quad_points, basisdata.quad_weights,
+        meshdata.facet2edge, meshdata.edge2facet, meshdata.facet_areas, meshdata.facet_normals
+    )
+    if on_interior:
+        K_self = 1j / 2 / k0 * _sparse.coo_array(
+            (_np.array(B_vals), (_np.array(B_rows), _np.array(B_cols))), shape=(num_edges, num_edges)
+        ).tocsc()
+    else:
+        K_self = -1j / 2 / k0 * _sparse.coo_array(
+            (_np.array(B_vals), (_np.array(B_rows), _np.array(B_cols))), shape=(num_edges, num_edges)
+        ).tocsc()
+
+    K_singular = K_self + _sparse.coo_array(
         (_np.array(K_vals), (_np.array(K_rows), _np.array(K_cols))), shape=(num_edges, num_edges)
     ).tocsc()
     L_singular = _sparse.coo_array(
@@ -686,7 +669,7 @@ def _compute_singularities_KL_operators(
     ).tocsc()
 
     if gen_preconditioner:
-        K_prec = _sparse.coo_array(
+        K_prec = K_self + _sparse.coo_array(
             (_np.array(Kp_vals), (_np.array(Kp_rows), _np.array(Kp_cols))), shape=(num_edges, num_edges)
         ).tocsc()
         L_prec = _sparse.coo_array(
