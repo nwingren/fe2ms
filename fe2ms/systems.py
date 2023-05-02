@@ -24,16 +24,13 @@ import os as _os
 import pickle as _pickle
 import logging
 
-import numba as _nb
-
 import numpy as _np
 from scipy import linalg as _linalg
 from scipy import sparse as _sparse
 from scipy.sparse import linalg as _sparse_linalg
+from scipy.constants import speed_of_light as _c0
 
 import dolfinx as _dolfinx
-
-from scipy.constants import speed_of_light as _c0
 
 from fe2ms.utility import (
     ComputationVolume as _ComputationVolume,

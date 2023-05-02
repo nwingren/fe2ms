@@ -19,7 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import numba as _nb
 import numpy as _np
-from adaptoctree import (tree as _tree, morton as _morton)
+from adaptoctree import morton as _morton
 
 @_nb.jit(nopython=True, fastmath=True, error_model='numpy')
 def compute_KL_operators_near_octree(

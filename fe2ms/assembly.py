@@ -21,8 +21,9 @@ import numba as _nb
 import numpy as _np
 from scipy import sparse as _sparse
 import dolfinx as _dolfinx
-import basix as _basix
 import ufl as _ufl
+from adaptoctree import tree as _tree, morton as _morton
+
 import fe2ms.bi_space as _bi_space
 import fe2ms.assembly_nonsingular_full as _assembly_full
 import fe2ms.assembly_nonsingular_aca as _assembly_aca
@@ -30,7 +31,6 @@ from fe2ms.utility import(
     ComputationVolume as _ComputationVolume,
     FEBISpaces as _FEBISpaces
 )
-from adaptoctree import tree as _tree, morton as _morton
 from fe2ms.bindings import demcem_bindings as _demcem_bindings
 
 
