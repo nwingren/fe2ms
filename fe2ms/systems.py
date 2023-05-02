@@ -101,7 +101,7 @@ class FEBISystem:
 
     # TODO: Make this private and do automatically at system creation instead. There might have
     # been reason to have it like this before, but to the user it's only confusing like this
-    def connect_fe_bi(self, save_file=None):
+    def connect_fe_bi(self, save_file=None, quad_order=2):
         """
         Connect FE and BI degrees of freedom with matrices T^SI and T^IS.
 
@@ -117,6 +117,11 @@ class FEBISystem:
             Path and file name (including extension) for data to be loaded/saved, by default None.
             If the file exists with a correct identifier, connection data is loaded.
             If the file does not exist, connection data will be saved to it after generation.
+        quad_order : int, optional
+            Order of quadrature used in BI integrals, by default 2. It is suggested that order 4 is
+            used instead of 3 for a higher order quadrature as they use the same number of points.
+            See basix.make_quadrature(basix.CellType.triangle, quad_order) for more details on
+            exact quadrature points and weights.
         """
 
         identifier = 'FEBISystem-connection_matrix'
@@ -181,7 +186,7 @@ class FEBISystem:
         ).tocsr()
         T_VI = T_IV.T
 
-        bi_basisdata = _bi_space.BIBasisData(bi_meshdata)
+        bi_basisdata = _bi_space.BIBasisData(bi_meshdata, quad_order=quad_order)
 
         self.spaces = _FEBISpaces(
             fe_space, bi_meshdata, bi_basisdata, T_SV, T_VS, T_IV, T_VI, fe_size, bi_size

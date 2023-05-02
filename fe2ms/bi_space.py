@@ -64,11 +64,9 @@ class BIBasisData:
     Class containing data defining basis functions on a given mesh and quadrature scheme
     """
 
-    def __init__(self, meshdata, quad_type=_basix.QuadratureType.Default, quad_order=2):
+    def __init__(self, meshdata, quad_order=2):
 
-        ref_quad_points, quad_weights = _basix.make_quadrature(
-            quad_type, _basix.CellType.triangle, quad_order
-        )
+        ref_quad_points, quad_weights = _basix.make_quadrature(_basix.CellType.triangle, quad_order)
         element = _basix.create_element(
             _basix.ElementFamily.RT, _basix.CellType.triangle, 1
         )
