@@ -22,6 +22,8 @@ import numpy as _np
 from scipy import sparse as _sparse
 import dolfinx as _dolfinx
 import ufl as _ufl
+from adaptoctree import tree as _tree, morton as _morton
+
 import fe2ms.bi_space as _bi_space
 import fe2ms.assembly_nonsingular_full as _assembly_full
 import fe2ms.assembly_nonsingular_aca as _assembly_aca
@@ -29,7 +31,6 @@ from fe2ms.utility import(
     ComputationVolume as _ComputationVolume,
     FEBISpaces as _FEBISpaces
 )
-from adaptoctree import tree as _tree, morton as _morton
 from fe2ms.bindings import demcem_bindings as _demcem_bindings
 
 
@@ -132,10 +133,6 @@ def assemble_bi_blocks_full(
         Mesh data for the BI problem.
     basisdata : febicode.rwg_rt_helpers.BIBasisData
         Basis data for the BI problem.
-    Einc_fun : function
-        Function describing an incident electric field. Both its input and output should be ndarray
-        with shape (n, 3) where n is an arbitrary number of evaluation points. None as input is
-        interpreted as no external incident field.
     quad_order_singular : int
         Quadrature order to use in DEMCEM singular integral computations.
 
@@ -434,48 +431,20 @@ def _compute_singularities_KL_operators(
     # Compute self-terms
     for facet_P, verts_P in enumerate(meshdata.facet2vert):
 
+        facetpairs_done.add((facet_P, facet_P))
+
         edges_m = meshdata.facet2edge[facet_P]
+
+        # Find signs of RWG corresponding to edge_m in facet_P
+        signs_m = _np.empty((3,), dtype=_np.int32)
+        for i, e in enumerate(edges_m):
+            signs_m[i] = meshdata.edge_facet_signs[e, meshdata.edge2facet[e] == facet_P][0]
 
         sing_vals = _np.zeros(9, dtype=_np.complex128)
         r_coords = meshdata.vert_coords[verts_P]
         _demcem_bindings.ws_st_rwg(
             r_coords[0], r_coords[1], r_coords[2], k0, N_quad, sing_vals
         )
-
-        # Find signs of RWG corresponding to edge_m in facet_P
-        # Also add term from nxK to the P values (sign depends on in/outside of volume)
-        signs_m = _np.empty((3,), dtype=_np.int32)
-        normal_P = meshdata.facet_normals[facet_P]
-        J_P = 2 * meshdata.facet_areas[facet_P]
-        for i, e in enumerate(edges_m):
-            f = meshdata.edge2facet[e] == facet_P
-            signs_m[i] = meshdata.edge_facet_signs[e, f][0]
-
-            # Only get non self combinations (self term is identically zero)
-            for e_n in edges_m[i+1:]:
-                f_n = meshdata.edge2facet[e_n] == facet_P
-                cross_product = _np.cross(normal_P, basisdata.basis[e_n, f_n])
-                if on_interior:
-                    cross_product *= -1
-                K_rows.append(e)
-                K_cols.append(e_n)
-                K_vals.append(-0.5 * _np.sum(
-                    basisdata.basis[e, f] * cross_product *
-                    basisdata.quad_weights.reshape(-1, 1)
-                ) * J_P)
-                if gen_preconditioner:
-                    Kp_rows.append(K_rows[-1])
-                    Kp_cols.append(K_cols[-1])
-                    Kp_vals.append(K_vals[-1])
-
-                # Add skew symmetric part
-                K_rows.append(e_n)
-                K_cols.append(e)
-                K_vals.append(-K_vals[-1])
-                if gen_preconditioner:
-                    Kp_rows.append(K_rows[-1])
-                    Kp_cols.append(K_cols[-1])
-                    Kp_vals.append(K_vals[-1])
 
         L_rows += [edges_m[i // 3] for i in range(9)]
         L_cols += [edges_m[i % 3] for i in range(9)]
@@ -506,6 +475,8 @@ def _compute_singularities_KL_operators(
 
             # Verts in facet P are cyclically permuted according to the edge local index in facet P
             local_roll_P = _np.roll(_np.arange(3), 2-e_local)
+            if meshdata.facet_flips[facet_P] == -1:
+                local_roll_P[[0, 1]] = local_roll_P[[1, 0]]
             edges_m_adj = edges_m[local_roll_P]
 
             verts_Q = meshdata.facet2vert[facet_Q]
@@ -526,7 +497,7 @@ def _compute_singularities_KL_operators(
             signs_n_adj = _np.empty((3,), dtype=_np.int32)
             for i, e in enumerate(edges_n_adj):
                 signs_n_adj[i] = meshdata.edge_facet_signs[e, meshdata.edge2facet[e] == facet_Q][0]
-            
+
             rows = [edges_m_adj[i // 3] for i in range(9)]
             cols = [edges_n_adj[i % 3] for i in range(9)]
 
@@ -565,7 +536,7 @@ def _compute_singularities_KL_operators(
             K_rows += cols
             K_cols += rows
             K_vals += K_vals[-9:]
-            
+
             for i in range(9):
                 singular_entries[(edges_m_adj[i // 3], edges_n_adj[i % 3])] = True
                 singular_entries[(edges_n_adj[i % 3], edges_m_adj[i // 3])] = True
@@ -580,9 +551,11 @@ def _compute_singularities_KL_operators(
 
                 facetpairs_done.add((max(facet_P, facet_Q), min(facet_P, facet_Q)))
 
-                # Verts in facet P are permuted according to the local index of connon vert
+                # Verts in facet P are permuted according to the local index of common vert
                 v_loc_P = _np.where(verts_P == v)[0][0]
                 local_roll_P = _np.roll(_np.arange(3), -v_loc_P)
+                if meshdata.facet_flips[facet_P] == -1:
+                    local_roll_P[[1, 2]] = local_roll_P[[2, 1]]
                 edges_m_adj = edges_m[local_roll_P]
 
                 verts_Q = meshdata.facet2vert[facet_Q]
@@ -592,7 +565,8 @@ def _compute_singularities_KL_operators(
                 verts_Q = meshdata.facet2vert[facet_Q]
                 v_loc_Q = _np.where(verts_Q == v)[0][0]
                 local_roll_Q = _np.roll(_np.arange(3), -v_loc_Q)
-                local_roll_Q[[1, 2]] = local_roll_Q[[2, 1]]
+                if meshdata.facet_flips[facet_Q] == 1:
+                    local_roll_Q[[1, 2]] = local_roll_Q[[2, 1]]
                 edges_n_adj = edges_n[local_roll_Q]
 
                 r_coords_adj = r_coords[local_roll_P]
@@ -673,7 +647,21 @@ def _compute_singularities_KL_operators(
                 L_cols.append(edge_n)
                 L_vals.append(L_contrib)
     
-    K_singular = _sparse.coo_array(
+    # Compute self-facet terms for the K operator using the Numba assembly for the B matrix block
+    B_rows, B_cols, B_vals = _assembly_full.assemble_B(
+        k0, basisdata.basis, basisdata.quad_points, basisdata.quad_weights,
+        meshdata.facet2edge, meshdata.edge2facet, meshdata.facet_areas, meshdata.facet_normals
+    )
+    if on_interior:
+        K_self = 1j / 2 / k0 * _sparse.coo_array(
+            (_np.array(B_vals), (_np.array(B_rows), _np.array(B_cols))), shape=(num_edges, num_edges)
+        ).tocsc()
+    else:
+        K_self = -1j / 2 / k0 * _sparse.coo_array(
+            (_np.array(B_vals), (_np.array(B_rows), _np.array(B_cols))), shape=(num_edges, num_edges)
+        ).tocsc()
+
+    K_singular = K_self + _sparse.coo_array(
         (_np.array(K_vals), (_np.array(K_rows), _np.array(K_cols))), shape=(num_edges, num_edges)
     ).tocsc()
     L_singular = _sparse.coo_array(
@@ -681,7 +669,7 @@ def _compute_singularities_KL_operators(
     ).tocsc()
 
     if gen_preconditioner:
-        K_prec = _sparse.coo_array(
+        K_prec = K_self + _sparse.coo_array(
             (_np.array(Kp_vals), (_np.array(Kp_rows), _np.array(Kp_cols))), shape=(num_edges, num_edges)
         ).tocsc()
         L_prec = _sparse.coo_array(

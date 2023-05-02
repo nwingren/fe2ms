@@ -17,7 +17,6 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-import os as _os
 from dataclasses import dataclass as _dataclass
 import numpy as _np
 from scipy import sparse as _sparse
@@ -51,7 +50,7 @@ class ComputationVolume():
         Anisotropic: (epsr, mur) where at least one parameter is a 3x3 tensor.
         Bi-isotropic: (epsr, mur, xi, zeta) where all parameters are scalars.
         Bi-anisotropic: (epsr, mur, xi, zeta) where at least one parameter is a 3x3 tensor.
-        Lossy materials are defined using complex parameters on the form epsr = epsr' - i*epsr''.
+        Lossy materials are defined using complex parameters on the form epsr = epsr' - j*epsr''.
 
         Parameters
         ----------
