@@ -619,8 +619,8 @@ class FEBISystemFull(FEBISystem):
 
 
     def solve_iterative(
-        self, solver=None, preconditioner=None, new_prec=False,
-        right_prec=True, return_prec=False, counter=None, solver_tol=1e-5
+        self, solver=None, preconditioner=None, new_prec=False, right_prec=True, counter=None,
+        solver_tol=1e-5, bi_scale=None
     ):
         """
         Solve system iteratively with preconditioning. Since the FE-BI system
@@ -642,22 +642,19 @@ class FEBISystemFull(FEBISystem):
             by default False.
         right_prec : bool, optional
             Whether to use right preconditioning instead of left, by default True.
-        return_prec : bool, optional
-            Whether to return the preconditioner LinearOperator, by default False.
         counter : function, optional
             Callback function to scipy iterative solver, by default None. Note that different
             solvers call this differently. For more info, see scipy documentation.
         solver_tol : float, optional
             (Relative) tolerance of iterative solver, by default 1e-5.
+        bi_scale : complex, optional
+            Scaling factor for the BI equation, by default -2jk0. Not applied to EJ formulation.
 
         Returns
         -------
         info : int
             0 if solver converged, >0 if solver did not converge,
             >0 if illegal input or breakdown of solver.
-        M_prec : function | NoneType
-            Preconditioner function which applies preconditioner in matrix-vector-products.
-            Is None if return_prec == False.
         """
 
         if self._rhs is None:
@@ -687,10 +684,16 @@ class FEBISystemFull(FEBISystem):
             K_SI = (self.spaces.T_SV @ self._system_blocks.K) @ self.spaces.T_VI
             K_SS = self.spaces.T_SV @ self._system_blocks.K @ self.spaces.T_VS
 
+        if bi_scale is None:
+            if self._formulation == 'ej':
+                bi_scale = 1
+            else:
+                bi_scale = -2j * self._k0
+
         fe_size = self.spaces.fe_size
         bi_size = self.spaces.bi_size
         in_size = fe_size - bi_size
-        
+
         if self._formulation == 'is-efie':
             if right_prec:
                 def matvec_fun(x):
@@ -699,8 +702,8 @@ class FEBISystemFull(FEBISystem):
                         K_II @ x[:in_size] + K_IS @ x[in_size:-bi_size],
                         K_SI @ x[:in_size] + K_SS @ x[in_size:-bi_size]
                         + self._system_blocks.B @ x[-bi_size:],
-                        self._system_blocks.P @ x[in_size:-bi_size]
-                        + self._system_blocks.Q @ x[-bi_size:]
+                        bi_scale * self._system_blocks.P @ x[in_size:-bi_size]
+                        + bi_scale * self._system_blocks.Q @ x[-bi_size:]
                     ))
             else:
                 def matvec_fun(x):
@@ -708,8 +711,8 @@ class FEBISystemFull(FEBISystem):
                         K_II @ x[:in_size] + K_IS @ x[in_size:-bi_size],
                         K_SI @ x[:in_size] + K_SS @ x[in_size:-bi_size]
                         + self._system_blocks.B @ x[-bi_size:],
-                        self._system_blocks.P @ x[in_size:-bi_size]
-                        + self._system_blocks.Q @ x[-bi_size:]
+                        bi_scale * self._system_blocks.P @ x[in_size:-bi_size]
+                        + bi_scale * self._system_blocks.Q @ x[-bi_size:]
                     ))
         elif self._formulation == 'vs-efie':
             if right_prec:
@@ -718,16 +721,16 @@ class FEBISystemFull(FEBISystem):
                     return _np.concatenate((
                         self._system_blocks.K @ x[:fe_size] +
                         self.spaces.T_VS @ (self._system_blocks.B @ x[-bi_size:]),
-                        self._system_blocks.P @ (self.spaces.T_SV @ x[:fe_size])
-                        + self._system_blocks.Q @ x[-bi_size:]
+                        bi_scale * self._system_blocks.P @ (self.spaces.T_SV @ x[:fe_size])
+                        + bi_scale * self._system_blocks.Q @ x[-bi_size:]
                     ))
             else:
                 def matvec_fun(x):
                     return _np.concatenate((
                         self._system_blocks.K @ x[:fe_size] +
                         self.spaces.T_VS @ (self._system_blocks.B @ x[-bi_size:]),
-                        self._system_blocks.P @ (self.spaces.T_SV @ x[:fe_size])
-                        + self._system_blocks.Q @ x[-bi_size:]
+                        bi_scale * self._system_blocks.P @ (self.spaces.T_SV @ x[:fe_size])
+                        + bi_scale * self._system_blocks.Q @ x[-bi_size:]
                     ))
         elif self._formulation == 'ej':
             if right_prec:
@@ -760,7 +763,7 @@ class FEBISystemFull(FEBISystem):
 
         if counter is None:
             if right_prec:
-                sol, info = solver(system_operator, self._rhs, tol=solver_tol)
+                sol, info = solver(system_operator, bi_scale * self._rhs, tol=solver_tol)
                 sol = self.M_prec(sol)
             else:
                 M_op = _sparse_linalg.LinearOperator(
@@ -768,10 +771,10 @@ class FEBISystemFull(FEBISystem):
                     matvec = self.M_prec,
                     dtype = _np.complex128
                 )
-                sol, info = solver(system_operator, self._rhs, M=M_op, tol=solver_tol)
+                sol, info = solver(system_operator, bi_scale * self._rhs, M=M_op, tol=solver_tol)
         else:
             if right_prec:
-                sol, info = solver(system_operator, self._rhs, callback=counter, tol=solver_tol)
+                sol, info = solver(system_operator, bi_scale * self._rhs, callback=counter, tol=solver_tol)
                 sol = self.M_prec(sol)
             else:
                 M_op = _sparse_linalg.LinearOperator(
@@ -780,16 +783,13 @@ class FEBISystemFull(FEBISystem):
                     dtype = _np.complex128
                 )
                 sol, info = solver(
-                    system_operator, self._rhs, M=M_op, callback=counter, tol=solver_tol
+                    system_operator, bi_scale * self._rhs, M=M_op, callback=counter, tol=solver_tol
                 )
-        
+
         self.sol_E = sol[:self.spaces.fe_size]
         self.sol_H = sol[self.spaces.fe_size:]
 
-        if return_prec:
-            return info, self.M_prec
-        else:
-            return info, None
+        return info
 
 
 class FEBISystemACA(FEBISystem):
@@ -862,8 +862,8 @@ class FEBISystemACA(FEBISystem):
 
 
     def solve_iterative(
-        self, solver=None, preconditioner=None, new_prec=False,
-        right_prec=True, return_prec=False, counter=None, solver_tol=1e-5
+        self, solver=None, preconditioner=None, new_prec=False, right_prec=True, counter=None,
+        solver_tol=1e-5, bi_scale=None
     ):
         """
         Solve system iteratively with preconditioning. Since the FE-BI system is highly
@@ -885,22 +885,19 @@ class FEBISystemACA(FEBISystem):
             by default False.
         right_prec : bool, optional
             Whether to use right preconditioning instead of left, by default True.
-        return_prec : bool, optional
-            Whether to return the preconditioner LinearOperator, by default False.
         counter : function, optional
             Callback function to scipy iterative solver, by default None. Note that different
             solvers call this differently. For more info, see scipy documentation.
         solver_tol : float, optional
             (Relative) tolerance of iterative solver, by default 1e-5.
+        bi_scale : complex, optional
+            Scaling factor for the BI equation, by default -2jk0. Not applied to EJ formulation.
 
         Returns
         -------
         info : int
             0 if solver converged, >0 if solver did not converge,
             >0 if illegal input or breakdown of solver.
-        M_prec : LinearOperator | NoneType
-            Preconditioner object. Either a sparse matrix or a linear operator which applies
-            preconditioner in matrix-vector-products. Is None if return_prec == False.
         """
 
         if self._rhs is None:
@@ -927,6 +924,12 @@ class FEBISystemACA(FEBISystem):
             K_SI = (self.spaces.T_SV @ self._system_blocks.K) @ self.spaces.T_VI
             K_SS = self.spaces.T_SV @ self._system_blocks.K @ self.spaces.T_VS
 
+        if bi_scale is None:
+            if self._formulation == 'ej':
+                bi_scale = 1
+            else:
+                bi_scale = -2j * self._k0
+
         fe_size = self.spaces.fe_size
         bi_size = self.spaces.bi_size
         in_size = fe_size - bi_size
@@ -939,10 +942,10 @@ class FEBISystemACA(FEBISystem):
                         K_II @ x[:in_size] + K_IS @ x[in_size:-bi_size],
                         K_SI @ x[:in_size] + K_SS @ x[in_size:-bi_size]
                         + self._system_blocks.B @ x[-bi_size:],
-                        self._system_blocks.P @ x[in_size:-bi_size]
-                        + self._far_operator.matvec_Kop(x[in_size:-bi_size])
-                        + self._system_blocks.Q @ x[-bi_size:]
-                        + self._far_operator.matvec_Lop(x[-bi_size:])
+                        bi_scale * self._system_blocks.P @ x[in_size:-bi_size]
+                        + bi_scale * self._far_operator.matvec_Kop(x[in_size:-bi_size])
+                        + bi_scale * self._system_blocks.Q @ x[-bi_size:]
+                        + bi_scale * self._far_operator.matvec_Lop(x[-bi_size:])
                     ))
             else:
                 def matvec_fun(x):
@@ -950,10 +953,10 @@ class FEBISystemACA(FEBISystem):
                         K_II @ x[:in_size] + K_IS @ x[in_size:-bi_size],
                         K_SI @ x[:in_size] + K_SS @ x[in_size:-bi_size]
                         + self._system_blocks.B @ x[-bi_size:],
-                        self._system_blocks.P @ x[in_size:-bi_size]
-                        + self._far_operator.matvec_Kop(x[in_size:-bi_size])
-                        + self._system_blocks.Q @ x[-bi_size:]
-                        + self._far_operator.matvec_Lop(x[-bi_size:])
+                        bi_scale * self._system_blocks.P @ x[in_size:-bi_size]
+                        + bi_scale * self._far_operator.matvec_Kop(x[in_size:-bi_size])
+                        + bi_scale * self._system_blocks.Q @ x[-bi_size:]
+                        + bi_scale * self._far_operator.matvec_Lop(x[-bi_size:])
                     ))
         elif self._formulation == 'vs-efie':
             if right_prec:
@@ -962,20 +965,20 @@ class FEBISystemACA(FEBISystem):
                     return _np.concatenate((
                         self._system_blocks.K @ x[:fe_size] +
                         self.spaces.T_VS @ (self._system_blocks.B @ x[-bi_size:]),
-                        self._system_blocks.P @ (self.spaces.T_SV @ x[:fe_size])
-                        + self._far_operator.matvec_Kop(self.spaces.T_SV @ x[:fe_size])
-                        + self._system_blocks.Q @ x[-bi_size:]
-                        + self._far_operator.matvec_Lop(x[-bi_size:])
+                        bi_scale * self._system_blocks.P @ (self.spaces.T_SV @ x[:fe_size])
+                        + bi_scale * self._far_operator.matvec_Kop(self.spaces.T_SV @ x[:fe_size])
+                        + bi_scale * self._system_blocks.Q @ x[-bi_size:]
+                        + bi_scale * self._far_operator.matvec_Lop(x[-bi_size:])
                     ))
             else:
                 def matvec_fun(x):
                     return _np.concatenate((
                         self._system_blocks.K @ x[:fe_size] +
                         self.spaces.T_VS @ (self._system_blocks.B @ x[-bi_size:]),
-                        self._system_blocks.P @ (self.spaces.T_SV @ x[:fe_size])
-                        + self._far_operator.matvec_Kop(self.spaces.T_SV @ x[:fe_size])
-                        + self._system_blocks.Q @ x[-bi_size:]
-                        + self._far_operator.matvec_Lop(x[-bi_size:])
+                        bi_scale * self._system_blocks.P @ (self.spaces.T_SV @ x[:fe_size])
+                        + bi_scale * self._far_operator.matvec_Kop(self.spaces.T_SV @ x[:fe_size])
+                        + bi_scale * self._system_blocks.Q @ x[-bi_size:]
+                        + bi_scale * self._far_operator.matvec_Lop(x[-bi_size:])
                     ))
         elif self._formulation == 'ej':
             if right_prec:
@@ -1032,7 +1035,7 @@ class FEBISystemACA(FEBISystem):
 
         if counter is None:
             if right_prec:
-                sol, info = solver(system_operator, self._rhs, tol=solver_tol)
+                sol, info = solver(system_operator, bi_scale * self._rhs, tol=solver_tol)
                 sol = self.M_prec(sol)
             else:
                 M_op = _sparse_linalg.LinearOperator(
@@ -1040,10 +1043,10 @@ class FEBISystemACA(FEBISystem):
                     matvec = self.M_prec,
                     dtype = _np.complex128
                 )
-                sol, info = solver(system_operator, self._rhs, M=M_op, tol=solver_tol)
+                sol, info = solver(system_operator, bi_scale * self._rhs, M=M_op, tol=solver_tol)
         else:
             if right_prec:
-                sol, info = solver(system_operator, self._rhs, callback=counter, tol=solver_tol)
+                sol, info = solver(system_operator, bi_scale * self._rhs, callback=counter, tol=solver_tol)
                 sol = self.M_prec(sol)
             else:
                 M_op = _sparse_linalg.LinearOperator(
@@ -1052,13 +1055,10 @@ class FEBISystemACA(FEBISystem):
                     dtype = _np.complex128
                 )
                 sol, info = solver(
-                    system_operator, self._rhs, M=M_op, callback=counter, tol=solver_tol
+                    system_operator, bi_scale * self._rhs, M=M_op, callback=counter, tol=solver_tol
                 )
-        
+
         self.sol_E = sol[:self.spaces.fe_size]
         self.sol_H = sol[self.spaces.fe_size:]
 
-        if return_prec:
-            return info, self.M_prec
-        else:
-            return info, None
+        return info
