@@ -51,7 +51,7 @@ class ComputationVolume():
         Anisotropic: (epsr, mur) where at least one parameter is a 3x3 tensor.
         Bi-isotropic: (epsr, mur, xi, zeta) where all parameters are scalars.
         Bi-anisotropic: (epsr, mur, xi, zeta) where at least one parameter is a 3x3 tensor.
-        Lossy materials are defined using complex parameters on the form epsr = epsr' - i*epsr''.
+        Lossy materials are defined using complex parameters on the form epsr = epsr' - j*epsr''.
 
         Parameters
         ----------
