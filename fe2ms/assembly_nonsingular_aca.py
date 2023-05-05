@@ -431,31 +431,35 @@ def compute_K_operator_entry_far(
                         dist_squared += p1**2 + p2**2 - 2 * p1 * p2
                     dist = _np.sqrt(dist_squared)
 
+                    cross_comp = 0j
                     cross_factor = -(1j * k0 + 1 / dist) * \
                         _np.exp(-1j * k0 * dist) / 4 / _np.pi / dist_squared
 
                     # Loop over coordinates for cross product
                     for i_coord in range(3):
 
+                        #  Component i_coord of (r - r') x Lambda_n
                         cross_comp = (
-                            quad_points[
-                                edge2facet[edge_m, i_facet_m], quad_point_m, (i_coord+1)%3
-                            ]
-                            - quad_points[
-                                edge2facet[edge_n, i_facet_n], quad_point_n, (i_coord+1)%3
-                            ]
-                        )
-                        cross_2 = (
-                            quad_points[
-                                edge2facet[edge_m, i_facet_m], quad_point_m, (i_coord-1)%3
-                            ]
-                            - quad_points[
-                                edge2facet[edge_n, i_facet_n], quad_point_n, (i_coord-1)%3
-                            ]
-                        )
-                        cross_comp = (
-                            cross_comp * basis[edge_n, i_facet_n, quad_point_n, (i_coord-1)%3]
-                            - cross_2 * basis[edge_n, i_facet_n, quad_point_n, (i_coord+1)%3]
+                            (
+                                quad_points[
+                                    edge2facet[edge_m, i_facet_m],
+                                    quad_point_m, (i_coord+1)%3
+                                ]
+                                - quad_points[
+                                    edge2facet[edge_n, i_facet_n],
+                                    quad_point_n, (i_coord+1)%3
+                                ]
+                            ) * basis[edge_n, i_facet_n, quad_point_n, (i_coord-1)%3]
+                            - (
+                                quad_points[
+                                    edge2facet[edge_m, i_facet_m],
+                                    quad_point_m, (i_coord-1)%3
+                                ]
+                                - quad_points[
+                                    edge2facet[edge_n, i_facet_n],
+                                    quad_point_n, (i_coord-1)%3
+                                ]
+                            ) * basis[edge_n, i_facet_n, quad_point_n, (i_coord+1)%3]
                         )
 
                         Kop_entry[0] -= (
@@ -569,6 +573,7 @@ def _compute_KL_operator_entries_near(
 
 
                         scalar_product = 0j
+                        cross_comp = 0j
                         cross_factor = -(1j * k0 + 1 / dist) * \
                             _np.exp(-1j * k0 * dist) / 4 / _np.pi / dist_squared
 
@@ -579,25 +584,28 @@ def _compute_KL_operator_entries_near(
                                 * basis[edges_n[i_val], i_facet_n, quad_point_n, i_coord]
                             )
 
+                            #  Component i_coord of (r - r') x Lambda_n
                             cross_comp = (
-                                quad_points[
-                                    edge2facet[edges_m[i_val], i_facet_m], quad_point_m, (i_coord+1)%3
-                                ]
-                                - quad_points[
-                                    edge2facet[edges_n[i_val], i_facet_n], quad_point_n, (i_coord+1)%3
-                                ]
-                            )
-                            cross_2 = (
-                                quad_points[
-                                    edge2facet[edges_m[i_val], i_facet_m], quad_point_m, (i_coord-1)%3
-                                ]
-                                - quad_points[
-                                    edge2facet[edges_n[i_val], i_facet_n], quad_point_n, (i_coord-1)%3
-                                ]
-                            )
-                            cross_comp = (
-                                cross_comp * basis[edges_n[i_val], i_facet_n, quad_point_n, (i_coord-1)%3]
-                                - cross_2 * basis[edges_n[i_val], i_facet_n, quad_point_n, (i_coord+1)%3]
+                                (
+                                    quad_points[
+                                        edge2facet[edges_m[i_val], i_facet_m],
+                                        quad_point_m, (i_coord+1)%3
+                                    ]
+                                    - quad_points[
+                                        edge2facet[edges_n[i_val], i_facet_n],
+                                        quad_point_n, (i_coord+1)%3
+                                    ]
+                                ) * basis[edges_n[i_val], i_facet_n, quad_point_n, (i_coord-1)%3]
+                                - (
+                                    quad_points[
+                                        edge2facet[edges_m[i_val], i_facet_m],
+                                        quad_point_m, (i_coord-1)%3
+                                    ]
+                                    - quad_points[
+                                        edge2facet[edges_n[i_val], i_facet_n],
+                                        quad_point_n, (i_coord-1)%3
+                                    ]
+                                ) * basis[edges_n[i_val], i_facet_n, quad_point_n, (i_coord+1)%3]
                             )
 
                             Kop_vals[i_val] -= (

@@ -86,31 +86,34 @@ def compute_far_field_integral(
 
                 # No multiplication by eta0 since the solH coeffs are already scaled by that
                 for i_quad in range(quad_points.shape[1]):
-                    basis_eval = basis[edge_m, i_facet_m, i_quad]
-                    scalar_prod = 0.
+                    scalar_prod_r = 0j
+                    scalar_prod_J = 0j
                     cross_prod_M = _np.empty(3, dtype=_np.complex128)
-                    cross_prod_J = _np.empty(3, dtype=_np.complex128)
 
                     for i_coord in range(3):
                         cross_prod_M[i_coord] = (
-                            unit_points[i_point, (i_coord+1)%3] * basis_eval[(i_coord-1)%3]
-                            - unit_points[i_point, (i_coord-1)%3] * basis_eval[(i_coord+1)%3]
+                            unit_points[i_point, (i_coord+1)%3]
+                            * basis[edge_m, i_facet_m, i_quad, (i_coord-1)%3]
+                            - unit_points[i_point, (i_coord-1)%3]
+                            * basis[edge_m, i_facet_m, i_quad, (i_coord+1)%3]
                         )
-                        scalar_prod += (
+                        scalar_prod_r += (
                             unit_points[i_point, i_coord]
                             * quad_points[edge2facet[edge_m, i_facet_m], i_quad, i_coord]
                         )
 
-                    for i_coord in range(3):
-                        cross_prod_J[i_coord] = (
-                            unit_points[i_point, (i_coord+1)%3] * cross_prod_M[(i_coord-1)%3]
-                            - unit_points[i_point, (i_coord-1)%3] * cross_prod_M[(i_coord+1)%3]
+                        # B(A.C) - C(A.B) = r(r.J) - J(r.r) = r(r.J) - J
+                        scalar_prod_J += (
+                            unit_points[i_point, i_coord]
+                            * basis[edge_m, i_facet_m, i_quad, i_coord]
                         )
 
-                    cross_prod_J *= sol_H[edge_m]
+                    cross_prod_J = sol_H[edge_m] * (
+                        unit_points[i_point] * scalar_prod_J - basis[edge_m, i_facet_m, i_quad]
+                    )
                     cross_prod_M *= -sol_E_bound[edge_m]
 
                     Efar[i_point] += (
-                        (cross_prod_J + cross_prod_M) * _np.exp(1j * k0 * scalar_prod)
+                        (cross_prod_M + cross_prod_J) * _np.exp(1j * k0 * scalar_prod_r)
                         * quad_weights[i_quad] * J_m
                     )

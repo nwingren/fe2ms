@@ -32,7 +32,8 @@ def assemble_KL_operators(
 
     for edge_m in _nb.prange(Kop_matrix.shape[0]): # pylint: disable=not-an-iterable
 
-        for edge_n in range(Kop_matrix.shape[0]):
+        # Symmetric assembly
+        for edge_n in range(edge_m, Kop_matrix.shape[0]):
 
             if (_nb.int32(edge_m), _nb.int32(edge_n)) in singular_entries:
                 continue
@@ -58,8 +59,8 @@ def assemble_KL_operators(
                                 dist_squared += p1**2 + p2**2 - 2 * p1 * p2
                             dist = _np.sqrt(dist_squared)
 
-
                             scalar_product = 0j
+                            cross_comp = 0j
                             cross_factor = -(1j * k0 + 1 / dist) * \
                                 _np.exp(-1j * k0 * dist) / 4 / _np.pi / dist_squared
 
@@ -70,35 +71,48 @@ def assemble_KL_operators(
                                     * basis[edge_n, i_facet_n, quad_point_n, i_coord]
                                 )
 
+                                #  Component i_coord of (r - r') x Lambda_n
                                 cross_comp = (
-                                    quad_points[
-                                        edge2facet[edge_m, i_facet_m], quad_point_m, (i_coord+1)%3
-                                    ]
-                                    - quad_points[
-                                        edge2facet[edge_n, i_facet_n], quad_point_n, (i_coord+1)%3
-                                    ]
-                                )
-                                cross_2 = (
-                                    quad_points[
-                                        edge2facet[edge_m, i_facet_m], quad_point_m, (i_coord-1)%3
-                                    ]
-                                    - quad_points[
-                                        edge2facet[edge_n, i_facet_n], quad_point_n, (i_coord-1)%3
-                                    ]
-                                )
-                                cross_comp = (
-                                    cross_comp * basis[edge_n, i_facet_n, quad_point_n, (i_coord-1)%3]
-                                    - cross_2 * basis[edge_n, i_facet_n, quad_point_n, (i_coord+1)%3]
+                                    (
+                                        quad_points[
+                                            edge2facet[edge_m, i_facet_m],
+                                            quad_point_m, (i_coord+1)%3
+                                        ]
+                                        - quad_points[
+                                            edge2facet[edge_n, i_facet_n],
+                                            quad_point_n, (i_coord+1)%3
+                                        ]
+                                    ) * basis[edge_n, i_facet_n, quad_point_n, (i_coord-1)%3]
+                                    - (
+                                        quad_points[
+                                            edge2facet[edge_m, i_facet_m],
+                                            quad_point_m, (i_coord-1)%3
+                                        ]
+                                        - quad_points[
+                                            edge2facet[edge_n, i_facet_n],
+                                            quad_point_n, (i_coord-1)%3
+                                        ]
+                                    ) * basis[edge_n, i_facet_n, quad_point_n, (i_coord+1)%3]
                                 )
 
-                                Kop_matrix[edge_m, edge_n] -= (
-                                    basis[edge_m, i_facet_m, quad_point_m, i_coord]
-                                    * cross_factor * cross_comp
+                                cross_comp *= (
+                                    basis[edge_m, i_facet_m, quad_point_m, i_coord] * cross_factor
                                     * quad_weights[quad_point_m] * quad_weights[quad_point_n]
                                     * jacobians
                                 )
+                                Kop_matrix[edge_m, edge_n] -= cross_comp
+                                Kop_matrix[edge_n, edge_m] -= cross_comp
 
                             Lop_matrix[edge_m, edge_n] += (
+                                1j * (
+                                    k0 * scalar_product
+                                    - 1 / k0 * divs[edge_m, i_facet_m] * divs[edge_n, i_facet_n]
+                                )
+                                * _np.exp(-1j * k0 * dist) / 4 / _np.pi / dist
+                                * quad_weights[quad_point_m] * quad_weights[quad_point_n]
+                                * jacobians
+                            )
+                            Lop_matrix[edge_n, edge_m] += (
                                 1j * (
                                     k0 * scalar_product
                                     - 1 / k0 * divs[edge_m, i_facet_m] * divs[edge_n, i_facet_n]
@@ -142,6 +156,7 @@ def facet_contrib_KL_operators(
 
 
             scalar_product = 0j
+            cross_comp = 0j
             cross_factor = -(1j * k0 + 1 / dist) * \
                 _np.exp(-1j * k0 * dist) / 4 / _np.pi / dist_squared
 
@@ -152,25 +167,28 @@ def facet_contrib_KL_operators(
                     * basis[edge_n, i_facet_n, quad_point_n, i_coord]
                 )
 
+                #  Component i_coord of (r - r') x Lambda_n
                 cross_comp = (
-                    quad_points[
-                        edge2facet[edge_m, i_facet_m], quad_point_m, (i_coord+1)%3
-                    ]
-                    - quad_points[
-                        edge2facet[edge_n, i_facet_n], quad_point_n, (i_coord+1)%3
-                    ]
-                )
-                cross_2 = (
-                    quad_points[
-                        edge2facet[edge_m, i_facet_m], quad_point_m, (i_coord-1)%3
-                    ]
-                    - quad_points[
-                        edge2facet[edge_n, i_facet_n], quad_point_n, (i_coord-1)%3
-                    ]
-                )
-                cross_comp = (
-                    cross_comp * basis[edge_n, i_facet_n, quad_point_n, (i_coord-1)%3]
-                    - cross_2 * basis[edge_n, i_facet_n, quad_point_n, (i_coord+1)%3]
+                    (
+                        quad_points[
+                            edge2facet[edge_m, i_facet_m],
+                            quad_point_m, (i_coord+1)%3
+                        ]
+                        - quad_points[
+                            edge2facet[edge_n, i_facet_n],
+                            quad_point_n, (i_coord+1)%3
+                        ]
+                    ) * basis[edge_n, i_facet_n, quad_point_n, (i_coord-1)%3]
+                    - (
+                        quad_points[
+                            edge2facet[edge_m, i_facet_m],
+                            quad_point_m, (i_coord-1)%3
+                        ]
+                        - quad_points[
+                            edge2facet[edge_n, i_facet_n],
+                            quad_point_n, (i_coord-1)%3
+                        ]
+                    ) * basis[edge_n, i_facet_n, quad_point_n, (i_coord+1)%3]
                 )
 
                 Kop_contrib -= (
@@ -194,8 +212,8 @@ def facet_contrib_KL_operators(
 
 
 @_nb.jit(nopython=True, fastmath=True, error_model='numpy')
-def assemble_B(
-    k0, basis, quad_points, quad_weights, facet2edge, edge2facet, facet_areas, facet_normals
+def assemble_B_integral(
+    basis, quad_points, quad_weights, facet2edge, edge2facet, facet_areas, facet_normals
 ):
     rows = []
     cols = []
@@ -205,9 +223,7 @@ def assemble_B(
         jacobian = 2 * facet_areas[facet]
         for i_edge_m in range(3):
             i_facet_m = _np.where(edge2facet[facet2edge[facet, i_edge_m]]==facet)[0][0]
-            for i_edge_n in range(3):
-                if i_edge_m == i_edge_n:
-                    continue
+            for i_edge_n in range(i_edge_m, 3):
                 integral = 0.
                 i_facet_n = _np.where(edge2facet[facet2edge[facet, i_edge_n]]==facet)[0][0]
                 for quad_point in range(quad_points.shape[1]):
@@ -221,13 +237,18 @@ def assemble_B(
                 rows.append(facet2edge[facet, i_edge_m])
                 cols.append(facet2edge[facet, i_edge_n])
                 vals.append(integral * jacobian)
-    
+
+                # Skew-symmetric part
+                rows.append(facet2edge[facet, i_edge_n])
+                cols.append(facet2edge[facet, i_edge_m])
+                vals.append(-integral * jacobian)
+
     rows_array = _np.zeros(len(vals), dtype=_np.int64)
     cols_array = _np.zeros(len(vals), dtype=_np.int64)
     B_array = _np.zeros(len(vals), dtype=_np.complex128)
     for i in range(len(rows)): # pylint: disable=consider-using-enumerate
         rows_array[i] = rows[i]
         cols_array[i] = cols[i]
-        B_array[i] = 1j * k0 * vals[i]
+        B_array[i] = vals[i]
 
     return rows_array, cols_array, B_array

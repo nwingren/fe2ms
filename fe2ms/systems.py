@@ -249,7 +249,7 @@ class FEBISystem:
             self._rhs = _np.concatenate((_np.zeros(self.spaces.fe_size), b_inc))
         elif self._formulation == 'ej':
             self._rhs = _np.concatenate((_np.zeros(self.spaces.fe_size - self.spaces.bi_size), b_inc))
-    
+
 
     # TODO: Add cartesian coordinate version of this (and of rcs)
     def compute_far_field(

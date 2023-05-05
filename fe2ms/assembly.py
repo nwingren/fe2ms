@@ -65,7 +65,9 @@ def assemble_KB_blocks(
             function_spaces.fe_space, 2, pec_facets
         )
         zero_fun = _dolfinx.fem.Function(function_spaces.fe_space)
-        zero_fun.interpolate(lambda x: (0*x[0], 0*x[0], 0*x[0]))
+        with zero_fun.vector.localForm() as loc:
+            loc.set(0)
+        zero_fun.x.scatter_forward()
         boundary_conditions = [_dolfinx.fem.dirichletbc(zero_fun, pec_dofs)]
     else:
         boundary_conditions = []
@@ -78,10 +80,14 @@ def assemble_KB_blocks(
     # Forms are different for isotropic/anisotropic and bi-isotropic/bi-anisotropic materials
     # Form for bi-materials is from https://doi.org/10.1163/1569393042954857
     epsr = computation_volume.get_epsr()
+    epsr.x.scatter_forward()
     inv_mur = computation_volume.get_inv_mur()
+    inv_mur.x.scatter_forward()
     if computation_volume.bi_material:
         xi = computation_volume.get_xi()
+        xi.x.scatter_forward()
         zeta = computation_volume.get_zeta()
+        zeta.x.scatter_forward()
         form = _dolfinx.fem.form(
             (
                 _ufl.inner(inv_mur * _ufl.curl(u), _ufl.curl(v))
@@ -97,20 +103,20 @@ def assemble_KB_blocks(
                 _ufl.inner(inv_mur * _ufl.curl(u), _ufl.curl(v))
                 - k0**2 * _ufl.inner(epsr * u, v)
             )
-            *_ufl.dx
+            * _ufl.dx
         )
     K_matrix = _dolfinx.fem.assemble_matrix(form, bcs=boundary_conditions)
 
     K_matrix.finalize() # pylint: disable=no-member
     K_matrix = _sparse.csr_array((K_matrix.data, K_matrix.indices, K_matrix.indptr)) # pylint: disable=no-member
 
-    rows, cols, B_vals = _assembly_full.assemble_B(
-        k0, function_spaces.bi_basisdata.basis,
+    rows, cols, B_vals = _assembly_full.assemble_B_integral(
+        function_spaces.bi_basisdata.basis,
         function_spaces.bi_basisdata.quad_points, function_spaces.bi_basisdata.quad_weights,
         function_spaces.bi_meshdata.facet2edge, function_spaces.bi_meshdata.edge2facet,
         function_spaces.bi_meshdata.facet_areas, function_spaces.bi_meshdata.facet_normals
     )
-    B_matrix = _sparse.coo_array((B_vals, (rows, cols)), shape=2*(function_spaces.bi_size,)).tocsr()
+    B_matrix = 1j * k0 *_sparse.coo_array((B_vals, (rows, cols)), shape=2*(function_spaces.bi_size,)).tocsr()
 
     return K_matrix, B_matrix
 
@@ -646,18 +652,18 @@ def _compute_singularities_KL_operators(
                 L_rows.append(edge_m)
                 L_cols.append(edge_n)
                 L_vals.append(L_contrib)
-    
+
     # Compute self-facet terms for the K operator using the Numba assembly for the B matrix block
-    B_rows, B_cols, B_vals = _assembly_full.assemble_B(
-        k0, basisdata.basis, basisdata.quad_points, basisdata.quad_weights,
+    B_rows, B_cols, B_vals = _assembly_full.assemble_B_integral(
+        basisdata.basis, basisdata.quad_points, basisdata.quad_weights,
         meshdata.facet2edge, meshdata.edge2facet, meshdata.facet_areas, meshdata.facet_normals
     )
     if on_interior:
-        K_self = 1j / 2 / k0 * _sparse.coo_array(
+        K_self = -1/2 * _sparse.coo_array(
             (_np.array(B_vals), (_np.array(B_rows), _np.array(B_cols))), shape=(num_edges, num_edges)
         ).tocsc()
     else:
-        K_self = -1j / 2 / k0 * _sparse.coo_array(
+        K_self = 1/2 * _sparse.coo_array(
             (_np.array(B_vals), (_np.array(B_rows), _np.array(B_cols))), shape=(num_edges, num_edges)
         ).tocsc()
 
