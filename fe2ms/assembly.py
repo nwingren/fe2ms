@@ -111,8 +111,7 @@ def assemble_KB_blocks(
     K_matrix = _sparse.csr_array((K_matrix.data, K_matrix.indices, K_matrix.indptr)) # pylint: disable=no-member
 
     rows, cols, B_vals = _assembly_full.assemble_B_integral(
-        function_spaces.bi_basisdata.basis,
-        function_spaces.bi_basisdata.quad_points, function_spaces.bi_basisdata.quad_weights,
+        function_spaces.bi_basisdata.basis, function_spaces.bi_basisdata.quad_weights,
         function_spaces.bi_meshdata.facet2edge, function_spaces.bi_meshdata.edge2facet,
         function_spaces.bi_meshdata.facet_areas, function_spaces.bi_meshdata.facet_normals
     )
@@ -655,7 +654,7 @@ def _compute_singularities_KL_operators(
 
     # Compute self-facet terms for the K operator using the Numba assembly for the B matrix block
     B_rows, B_cols, B_vals = _assembly_full.assemble_B_integral(
-        basisdata.basis, basisdata.quad_points, basisdata.quad_weights,
+        basisdata.basis, basisdata.quad_weights,
         meshdata.facet2edge, meshdata.edge2facet, meshdata.facet_areas, meshdata.facet_normals
     )
     if on_interior:

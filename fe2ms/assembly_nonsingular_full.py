@@ -213,7 +213,7 @@ def facet_contrib_KL_operators(
 
 @_nb.jit(nopython=True, fastmath=True, error_model='numpy')
 def assemble_B_integral(
-    basis, quad_points, quad_weights, facet2edge, edge2facet, facet_areas, facet_normals
+    basis, quad_weights, facet2edge, edge2facet, facet_areas, facet_normals
 ):
     rows = []
     cols = []
@@ -226,14 +226,15 @@ def assemble_B_integral(
             for i_edge_n in range(i_edge_m, 3):
                 integral = 0.
                 i_facet_n = _np.where(edge2facet[facet2edge[facet, i_edge_n]]==facet)[0][0]
-                for quad_point in range(quad_points.shape[1]):
+                for i_quad in range(quad_weights.shape[0]):
                     for i_coord in range(3):
                         integral += facet_normals[facet, i_coord] * (
-                            basis[facet2edge[facet, i_edge_m], i_facet_m, quad_point, (i_coord+1)%3]
-                            * basis[facet2edge[facet, i_edge_n], i_facet_n, quad_point, (i_coord-1)%3]
-                            - basis[facet2edge[facet, i_edge_m], i_facet_m, quad_point, (i_coord-1)%3]
-                            * basis[facet2edge[facet, i_edge_n], i_facet_n, quad_point, (i_coord+1)%3]
-                        ) * quad_weights[quad_point]
+                            basis[facet2edge[facet, i_edge_m], i_facet_m, i_quad, (i_coord+1)%3]
+                            * basis[facet2edge[facet, i_edge_n], i_facet_n, i_quad, (i_coord-1)%3]
+                            - basis[facet2edge[facet, i_edge_m], i_facet_m, i_quad, (i_coord-1)%3]
+                            * basis[facet2edge[facet, i_edge_n], i_facet_n, i_quad, (i_coord+1)%3]
+                        ) * quad_weights[i_quad]
+
                 rows.append(facet2edge[facet, i_edge_m])
                 cols.append(facet2edge[facet, i_edge_n])
                 vals.append(integral * jacobian)
@@ -245,7 +246,7 @@ def assemble_B_integral(
 
     rows_array = _np.zeros(len(vals), dtype=_np.int64)
     cols_array = _np.zeros(len(vals), dtype=_np.int64)
-    B_array = _np.zeros(len(vals), dtype=_np.complex128)
+    B_array = _np.zeros(len(vals))
     for i in range(len(rows)): # pylint: disable=consider-using-enumerate
         rows_array[i] = rows[i]
         cols_array[i] = cols[i]

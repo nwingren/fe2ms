@@ -506,10 +506,7 @@ def connect_fe_bi_spaces(fe_space, ext_facets):
         free_vert_bi = _np.setdiff1d(
             bi_meshdata.facet2vert[bi_facet], edge_verts_bi, assume_unique=True
         )[0]
-        rwg_dir = bi_sign * (
-            _np.mean(bi_meshdata.vert_coords[edge_verts_bi], axis=0)
-            - bi_meshdata.vert_coords[free_vert_bi]
-        )
+        rwg_dir = bi_sign * (centroid.ravel() - bi_meshdata.vert_coords[free_vert_bi])
         fe2bi_connector[bi_edge, fe_dof] *= _np.sign(cross @ rwg_dir)
 
     return fe2bi_connector, bi_meshdata
