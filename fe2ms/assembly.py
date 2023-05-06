@@ -426,7 +426,6 @@ def _compute_singularities_KL_operators(
         Kp_cols = []
         Lp_rows = []
         Lp_cols = []
-        Kp_vals = []
         Lp_vals = []
 
     # Need extra connectivity for VA
@@ -674,9 +673,7 @@ def _compute_singularities_KL_operators(
     ).tocsc()
 
     if gen_preconditioner:
-        K_prec = K_self + _sparse.coo_array(
-            (_np.array(Kp_vals), (_np.array(Kp_rows), _np.array(Kp_cols))), shape=(num_edges, num_edges)
-        ).tocsc()
+        K_prec = K_self
         L_prec = _sparse.coo_array(
             (_np.array(Lp_vals), (_np.array(Lp_rows), _np.array(Lp_cols))), shape=(num_edges, num_edges)
         ).tocsc()

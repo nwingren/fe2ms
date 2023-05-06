@@ -601,7 +601,7 @@ class FEBISystemFull(FEBISystem):
 
     def solve_iterative(
         self, solver=None, preconditioner=None, new_prec=False, right_prec=True, counter=None,
-        solver_tol=1e-5, bi_scale=None
+        solver_tol=1e-5, bi_scale=1.
     ):
         """
         Solve system iteratively with preconditioning. Since the FE-BI system
@@ -629,7 +629,7 @@ class FEBISystemFull(FEBISystem):
         solver_tol : float, optional
             (Relative) tolerance of iterative solver, by default 1e-5.
         bi_scale : complex, optional
-            Scaling factor for the BI equation, by default -2jk0. Not applied to EJ formulation.
+            Scaling factor for the BI equation, by default 1. Not applied to EJ formulation.
 
         Returns
         -------
@@ -658,18 +658,15 @@ class FEBISystemFull(FEBISystem):
         else:
             self.M_prec = preconditioner
 
+        if self._formulation == 'ej':
+            bi_scale = 1.
+
         # LinearOperator for matrix-vector multiplication such that sparse blocks are kept that way
         if self._formulation in ('is-efie', 'ej'):
             K_II = self.spaces.T_IV @ self._system_blocks.K @ self.spaces.T_VI
             K_IS = self.spaces.T_IV @ self._system_blocks.K @ self.spaces.T_VS
             K_SI = (self.spaces.T_SV @ self._system_blocks.K) @ self.spaces.T_VI
             K_SS = self.spaces.T_SV @ self._system_blocks.K @ self.spaces.T_VS
-
-        if bi_scale is None:
-            if self._formulation == 'ej':
-                bi_scale = 1
-            else:
-                bi_scale = -2j * self._k0
 
         fe_size = self.spaces.fe_size
         bi_size = self.spaces.bi_size
@@ -844,7 +841,7 @@ class FEBISystemACA(FEBISystem):
 
     def solve_iterative(
         self, solver=None, preconditioner=None, new_prec=False, right_prec=True, counter=None,
-        solver_tol=1e-5, bi_scale=None
+        solver_tol=1e-5, bi_scale=1.
     ):
         """
         Solve system iteratively with preconditioning. Since the FE-BI system is highly
@@ -872,7 +869,7 @@ class FEBISystemACA(FEBISystem):
         solver_tol : float, optional
             (Relative) tolerance of iterative solver, by default 1e-5.
         bi_scale : complex, optional
-            Scaling factor for the BI equation, by default -2jk0. Not applied to EJ formulation.
+            Scaling factor for the BI equation, by default 1. Not applied to EJ formulation.
 
         Returns
         -------
@@ -897,6 +894,9 @@ class FEBISystemACA(FEBISystem):
                 self.M_prec = _precs.direct(self)
         else:
             self.M_prec = preconditioner
+        
+        if self._formulation == 'ej':
+            bi_scale = 1.
 
         # LinearOperator for matrix-vector multiplication such that sparse blocks are kept that way
         if self._formulation in ('is-efie', 'ej'):
@@ -904,12 +904,6 @@ class FEBISystemACA(FEBISystem):
             K_IS = self.spaces.T_IV @ self._system_blocks.K @ self.spaces.T_VS
             K_SI = (self.spaces.T_SV @ self._system_blocks.K) @ self.spaces.T_VI
             K_SS = self.spaces.T_SV @ self._system_blocks.K @ self.spaces.T_VS
-
-        if bi_scale is None:
-            if self._formulation == 'ej':
-                bi_scale = 1
-            else:
-                bi_scale = -2j * self._k0
 
         fe_size = self.spaces.fe_size
         bi_size = self.spaces.bi_size
