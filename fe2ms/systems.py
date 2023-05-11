@@ -390,7 +390,7 @@ class FEBISystem:
         )
 
         # Interpolate into Lagrange for proper visualization
-        V0 = _dolfinx.fem.VectorFunctionSpace(self.spaces.fe_space.mesh, ('CG', 1))
+        V0 = _dolfinx.fem.VectorFunctionSpace(self.spaces.fe_space.mesh, ('DG', 1))
         efield_fun_cg = _dolfinx.fem.Function(V0, dtype=_np.complex128)
         efield_fun_cg.interpolate(efield_fun_fe)
         efield_near[fe_points] = efield_fun_cg.eval(points_near[fe_points], closest_cells)

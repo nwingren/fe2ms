@@ -167,8 +167,8 @@ def _make_sparse_mat(formulation, k0, system_blocks, spaces, K_prec, L_prec, sca
     elif formulation == 'vs-efie':
         sparse_mat = _sparse.bmat(
             [
-                [system_blocks.K, spaces.T_IV @ system_blocks.B],
-                [scale * K_prec, scale * L_prec]
+                [system_blocks.K, spaces.T_VS @ system_blocks.B],
+                [scale * K_prec @ spaces.T_SV, scale * L_prec]
             ],
             'csc'
         )
