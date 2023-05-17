@@ -420,10 +420,9 @@ def _compute_singularities_KL_operators(
     )
 
     facetpairs_done = set()
+    facetpairs_done2 = set()
 
     if gen_preconditioner:
-        Kp_rows = []
-        Kp_cols = []
         Lp_rows = []
         Lp_cols = []
         Lp_vals = []
@@ -432,20 +431,27 @@ def _compute_singularities_KL_operators(
     meshdata.mesh.topology.create_connectivity(0, 2)
     vert2facet = meshdata.mesh.topology.connectivity(0, 2)
 
+    sing_vals = _np.zeros(9, dtype=_np.complex128)
+
     # Compute self-terms
     for facet_P, verts_P in enumerate(meshdata.facet2vert):
 
         facetpairs_done.add((facet_P, facet_P))
+        facetpairs_done2.add((facet_P, facet_P))
 
-        edges_m = meshdata.facet2edge[facet_P]
+        # Switch order of vertices if this does not correspond to ordering associated with
+        # positive outward normal.
+        if meshdata.facet_flips[facet_P] < 0:
+            local_order = _np.array([1,0,2], dtype=_np.int32)
+
+        edges_m = meshdata.facet2edge[facet_P][local_order]
 
         # Find signs of RWG corresponding to edge_m in facet_P
         signs_m = _np.empty((3,), dtype=_np.int32)
         for i, e in enumerate(edges_m):
             signs_m[i] = meshdata.edge_facet_signs[e, meshdata.edge2facet[e] == facet_P][0]
 
-        sing_vals = _np.zeros(9, dtype=_np.complex128)
-        r_coords = meshdata.vert_coords[verts_P]
+        r_coords = meshdata.vert_coords[verts_P[local_order]]
         _demcem_bindings.ws_st_rwg(
             r_coords[0], r_coords[1], r_coords[2], k0, N_quad, sing_vals
         )
@@ -465,166 +471,342 @@ def _compute_singularities_KL_operators(
         for i in range(9):
             singular_entries[(edges_m[i // 3], edges_m[i % 3])] = True
 
-        # Find all EA facets (remove self facet)
-        # ea_facets is ordered the same way as edges_m
-        ea_facets = meshdata.edge2facet[edges_m]
-        ea_facets = ea_facets[ea_facets != facet_P]
-        for e_local, facet_Q in enumerate(ea_facets):
+    # Compute edge adjacent terms
+    for edge, facets in enumerate(meshdata.edge2facet):
 
-            # Each facet pair is only done once due to symmetry
-            if (max(facet_P, facet_Q), min(facet_P, facet_Q)) in facetpairs_done:
-                continue
+        for facet_P in facets:
+
+            facet_Q = facets[facets != facet_P][0]
 
             facetpairs_done.add((max(facet_P, facet_Q), min(facet_P, facet_Q)))
+            facetpairs_done2.add((max(facet_P, facet_Q), min(facet_P, facet_Q)))
 
-            # Verts in facet P are cyclically permuted according to the edge local index in facet P
-            local_roll_P = _np.roll(_np.arange(3), 2-e_local)
-            if meshdata.facet_flips[facet_P] == -1:
-                local_roll_P[[0, 1]] = local_roll_P[[1, 0]]
-            edges_m_adj = edges_m[local_roll_P]
+            # Vertices attached to edge, but not in the correct order
+            vert_1, vert_2 = meshdata.edge2vert[edge]
 
-            verts_Q = meshdata.facet2vert[facet_Q]
-            edges_n = meshdata.facet2edge[facet_Q]
+            # Find free vertices and get the correct order (local to facet P) for edge vertices
+            vert_3 = meshdata.facet2vert[facet_P][_np.logical_and(
+                meshdata.facet2vert[facet_P] != vert_1,
+                meshdata.facet2vert[facet_P] != vert_2
+            )][0]
+            vert_4 = meshdata.facet2vert[facet_Q][_np.logical_and(
+                meshdata.facet2vert[facet_Q] != vert_1,
+                meshdata.facet2vert[facet_Q] != vert_2
+            )][0]
+            loc_free = _np.nonzero(meshdata.facet2vert[facet_P] == vert_3)[0][0]
+            vert_1 = meshdata.facet2vert[facet_P][(loc_free + 1) % 3]
+            vert_2 = meshdata.facet2vert[facet_P][(loc_free + 2) % 3]
 
-            # Verts in facet Q are permuted in a more complicated way
-            local_roll_Q = _np.empty(3, dtype=_np.int32)
-            local_roll_Q[0] = _np.where(verts_Q == verts_P[local_roll_P][1])[0]
-            local_roll_Q[1] = _np.where(verts_Q == verts_P[local_roll_P][0])[0]
-            local_roll_Q[2] = _np.setdiff1d(_np.arange(3), local_roll_Q[:2])
-            edges_n_adj = edges_n[local_roll_Q]
+            # Switch order of vertices attached to edge if this does not correspond to ordering
+            # associated with positive outward normal.
+            if meshdata.facet_flips[facet_P] < 0:
+                vert_1, vert_2 = vert_2, vert_1
 
-            r_coords_adj = r_coords[local_roll_P]
-            r4 = meshdata.vert_coords[verts_Q[local_roll_Q][2]]
+            # Local indices of vertices in P facet
+            local_P = _np.empty(3, dtype=_np.int32)
+            local_P[0] = _np.nonzero(meshdata.facet2vert[facet_P] == vert_1)[0][0]
+            local_P[1] = _np.nonzero(meshdata.facet2vert[facet_P] == vert_2)[0][0]
+            local_P[2] = _np.nonzero(meshdata.facet2vert[facet_P] == vert_3)[0][0]
 
-            # Find signs of RWG corresponding to edge_n in facet_Q. Also roll signs_m
-            signs_m_adj = signs_m[local_roll_P]
-            signs_n_adj = _np.empty((3,), dtype=_np.int32)
-            for i, e in enumerate(edges_n_adj):
-                signs_n_adj[i] = meshdata.edge_facet_signs[e, meshdata.edge2facet[e] == facet_Q][0]
+            # Find local indices of vertices in Q facet after correcting order
+            local_Q = _np.empty(3, dtype=_np.int32)
+            local_Q[0] = _np.nonzero(meshdata.facet2vert[facet_Q] == vert_2)[0][0]
+            local_Q[1] = _np.nonzero(meshdata.facet2vert[facet_Q] == vert_1)[0][0]
+            local_Q[2] = _np.nonzero(meshdata.facet2vert[facet_Q] == vert_4)[0][0]
 
-            rows = [edges_m_adj[i // 3] for i in range(9)]
-            cols = [edges_n_adj[i % 3] for i in range(9)]
+            # Edges reordered according to DEMCEM local indexation
+            edges_m = meshdata.facet2edge[facet_P][local_P]
+            edges_n = meshdata.facet2edge[facet_Q][local_Q]
+
+            signs_m = _np.empty((3,), dtype=_np.int32)
+            signs_n = _np.empty((3,), dtype=_np.int32)
+            for i, (em, en) in enumerate(zip(edges_m, edges_n)):
+                signs_m[i] = meshdata.edge_facet_signs[em, meshdata.edge2facet[em] == facet_P][0]
+                signs_n[i] = meshdata.edge_facet_signs[en, meshdata.edge2facet[en] == facet_Q][0]
+
+            rows = [edges_m[i // 3] for i in range(9)]
+            cols = [edges_n[i % 3] for i in range(9)]
 
             _demcem_bindings.ws_ea_rwg(
-                r_coords_adj[0], r_coords_adj[1], r_coords_adj[2], r4, k0,
-                N_quad, N_quad, sing_vals
+                meshdata.vert_coords[vert_1], meshdata.vert_coords[vert_2],
+                meshdata.vert_coords[vert_3], meshdata.vert_coords[vert_4],
+                k0, N_quad, N_quad, sing_vals
             )
             L_rows += rows
             L_cols += cols
             L_vals += [
-                sing_vals[i] / 4 / _np.pi * signs_m_adj[i // 3] * signs_n_adj[i % 3]
-                / meshdata.edge_lengths[edges_m_adj[i // 3]]
-                / meshdata.edge_lengths[edges_n_adj[i % 3]]
+                sing_vals[i] / 4 / _np.pi * signs_m[i // 3] * signs_n[i % 3]
+                / meshdata.edge_lengths[edges_m[i // 3]]
+                / meshdata.edge_lengths[edges_n[i % 3]]
                 for i in range(9)
             ]
 
-            # Symmetric part
-            L_rows += cols
-            L_cols += rows
-            L_vals += L_vals[-9:]
-
             _demcem_bindings.ss_ea_rwg(
-                r_coords_adj[0], r_coords_adj[1], r_coords_adj[2], r4, k0,
-                N_quad, N_quad, sing_vals
+                meshdata.vert_coords[vert_1], meshdata.vert_coords[vert_2],
+                meshdata.vert_coords[vert_3], meshdata.vert_coords[vert_4],
+                k0, N_quad, N_quad, sing_vals
             )
             K_rows += rows
             K_cols += cols
             K_vals += [
-                - sing_vals[i] / 4 / _np.pi * signs_m_adj[i // 3] * signs_n_adj[i % 3]
-                / meshdata.edge_lengths[edges_m_adj[i // 3]]
-                / meshdata.edge_lengths[edges_n_adj[i % 3]]
+                - sing_vals[i] / 4 / _np.pi * signs_m[i // 3] * signs_n[i % 3]
+                / meshdata.edge_lengths[edges_m[i // 3]]
+                / meshdata.edge_lengths[edges_n[i % 3]]
                 for i in range(9)
             ]
 
-            # Symmetric part
-            K_rows += cols
-            K_cols += rows
-            K_vals += K_vals[-9:]
-
             for i in range(9):
-                singular_entries[(edges_m_adj[i // 3], edges_n_adj[i % 3])] = True
-                singular_entries[(edges_n_adj[i % 3], edges_m_adj[i // 3])] = True
+                singular_entries[(edges_m[i // 3], edges_n[i % 3])] = True
 
-        # Find all VA facets
-        for v in verts_P:
-            for facet_Q in vert2facet.links(v):
+    # Compute vertex adjacent terms
+    for vert_1 in range(meshdata.vert_coords.shape[0]):
+        for facet_P in vert2facet.links(vert_1):
+            for facet_Q in vert2facet.links(vert_1):
 
-                # Each facet pair is only done once due to symmetry
                 if (max(facet_P, facet_Q), min(facet_P, facet_Q)) in facetpairs_done:
-                    continue
+                    if (max(facet_P, facet_Q), min(facet_P, facet_Q)) in facetpairs_done2:
+                        continue
+                    facetpairs_done2.add((max(facet_P, facet_Q), min(facet_P, facet_Q)))
+                else:
+                    facetpairs_done.add((max(facet_P, facet_Q), min(facet_P, facet_Q)))
 
-                facetpairs_done.add((max(facet_P, facet_Q), min(facet_P, facet_Q)))
+                # Non-common vertex indices according to DEMCEM (not adjusted for normal flips)
+                loc_common_P = _np.nonzero(meshdata.facet2vert[facet_P] == vert_1)[0][0]
+                loc_common_Q = _np.nonzero(meshdata.facet2vert[facet_Q] == vert_1)[0][0]
+                vert_2 = meshdata.facet2vert[facet_P][(loc_common_P + 1) % 3]
+                vert_3 = meshdata.facet2vert[facet_P][(loc_common_P + 2) % 3]
+                vert_5 = meshdata.facet2vert[facet_Q][(loc_common_Q + 1) % 3]
+                vert_4 = meshdata.facet2vert[facet_Q][(loc_common_Q + 2) % 3]
 
-                # Verts in facet P are permuted according to the local index of common vert
-                v_loc_P = _np.where(verts_P == v)[0][0]
-                local_roll_P = _np.roll(_np.arange(3), -v_loc_P)
-                if meshdata.facet_flips[facet_P] == -1:
-                    local_roll_P[[1, 2]] = local_roll_P[[2, 1]]
-                edges_m_adj = edges_m[local_roll_P]
+                # vert_2, vert_3 = meshdata.facet2vert[facet_P][meshdata.facet2vert[facet_P] != vert_1]
+                # vert_4, vert_5 = meshdata.facet2vert[facet_Q][meshdata.facet2vert[facet_Q] != vert_1]
 
-                verts_Q = meshdata.facet2vert[facet_Q]
-                edges_n = meshdata.facet2edge[facet_Q]
+                # Switch order of non-common vertices if this does not correspond to ordering
+                # associated with positive outward normal.
+                if meshdata.facet_flips[facet_P] < 0:
+                    vert_2, vert_3 = vert_3, vert_2
+                if meshdata.facet_flips[facet_Q] < 0:
+                    vert_4, vert_5 = vert_5, vert_4
 
-                # Similar for verts in facet Q but there is also a flip
-                verts_Q = meshdata.facet2vert[facet_Q]
-                v_loc_Q = _np.where(verts_Q == v)[0][0]
-                local_roll_Q = _np.roll(_np.arange(3), -v_loc_Q)
-                if meshdata.facet_flips[facet_Q] == 1:
-                    local_roll_Q[[1, 2]] = local_roll_Q[[2, 1]]
-                edges_n_adj = edges_n[local_roll_Q]
+                local_P = _np.empty(3, dtype=_np.int32)
+                local_P[0] = _np.nonzero(meshdata.facet2vert[facet_P] == vert_1)[0][0]
+                local_P[1] = _np.nonzero(meshdata.facet2vert[facet_P] == vert_2)[0][0]
+                local_P[2] = _np.nonzero(meshdata.facet2vert[facet_P] == vert_3)[0][0]
+                local_Q = _np.empty(3, dtype=_np.int32)
+                local_Q[0] = _np.nonzero(meshdata.facet2vert[facet_Q] == vert_1)[0][0]
+                local_Q[1] = _np.nonzero(meshdata.facet2vert[facet_Q] == vert_4)[0][0]
+                local_Q[2] = _np.nonzero(meshdata.facet2vert[facet_Q] == vert_5)[0][0]
 
-                r_coords_adj = r_coords[local_roll_P]
-                r4 = meshdata.vert_coords[verts_Q[local_roll_Q][1]]
-                r5 = meshdata.vert_coords[verts_Q[local_roll_Q][2]]
+                # Edges reordered according to DEMCEM local indexation
+                edges_m = meshdata.facet2edge[facet_P][local_P]
+                edges_n = meshdata.facet2edge[facet_Q][local_Q]
 
-                # Find signs of RWG corresponding to edge_n in facet_Q. Also roll signs_m
-                signs_m_adj = signs_m[local_roll_P]
-                signs_n_adj = _np.empty((3,), dtype=_np.int32)
-                for i, e in enumerate(edges_n_adj):
-                    signs_n_adj[i] = meshdata.edge_facet_signs[e, meshdata.edge2facet[e] == facet_Q][0]
+                signs_m = _np.empty((3,), dtype=_np.int32)
+                signs_n = _np.empty((3,), dtype=_np.int32)
+                for i, (em, en) in enumerate(zip(edges_m, edges_n)):
+                    signs_m[i] = meshdata.edge_facet_signs[em, meshdata.edge2facet[em] == facet_P][0]
+                    signs_n[i] = meshdata.edge_facet_signs[en, meshdata.edge2facet[en] == facet_Q][0]
 
-                rows = [edges_m_adj[i // 3] for i in range(9)]
-                cols = [edges_n_adj[i % 3] for i in range(9)]
+                rows = [edges_m[i // 3] for i in range(9)]
+                cols = [edges_n[i % 3] for i in range(9)]
 
                 _demcem_bindings.ws_va_rwg(
-                    r_coords_adj[0], r_coords_adj[1], r_coords_adj[2], r4, r5, k0,
-                    N_quad, N_quad, N_quad, sing_vals
+                    meshdata.vert_coords[vert_1], meshdata.vert_coords[vert_2],
+                    meshdata.vert_coords[vert_3], meshdata.vert_coords[vert_4],
+                    meshdata.vert_coords[vert_5], k0, N_quad, N_quad, N_quad, sing_vals
                 )
                 L_rows += rows
                 L_cols += cols
                 L_vals += [
-                    sing_vals[i] / 4 / _np.pi * signs_m_adj[i // 3] * signs_n_adj[i % 3]
-                    / meshdata.edge_lengths[edges_m_adj[i // 3]]
-                    / meshdata.edge_lengths[edges_n_adj[i % 3]]
+                    sing_vals[i] / 4 / _np.pi * signs_m[i // 3] * signs_n[i % 3]
+                    / meshdata.edge_lengths[edges_m[i // 3]]
+                    / meshdata.edge_lengths[edges_n[i % 3]]
                     for i in range(9)
                 ]
 
-                # Symmetric part
-                L_rows += cols
-                L_cols += rows
-                L_vals += L_vals[-9:]
-
                 _demcem_bindings.ss_va_rwg(
-                    r_coords_adj[0], r_coords_adj[1], r_coords_adj[2], r4, r5, k0,
-                    N_quad, N_quad, N_quad, sing_vals
+                    meshdata.vert_coords[vert_1], meshdata.vert_coords[vert_2],
+                    meshdata.vert_coords[vert_3], meshdata.vert_coords[vert_4],
+                    meshdata.vert_coords[vert_5], k0, N_quad, N_quad, N_quad, sing_vals
                 )
                 K_rows += rows
                 K_cols += cols
                 K_vals += [
-                    - sing_vals[i] / 4 / _np.pi * signs_m_adj[i // 3] * signs_n_adj[i % 3]
-                    / meshdata.edge_lengths[edges_m_adj[i // 3]]
-                    / meshdata.edge_lengths[edges_n_adj[i % 3]]
+                    - sing_vals[i] / 4 / _np.pi * signs_m[i // 3] * signs_n[i % 3]
+                    / meshdata.edge_lengths[edges_m[i // 3]]
+                    / meshdata.edge_lengths[edges_n[i % 3]]
                     for i in range(9)
                 ]
 
-                # Symmetric part
-                K_rows += cols
-                K_cols += rows
-                K_vals += K_vals[-9:]
-
                 for i in range(9):
-                    singular_entries[(edges_m_adj[i // 3], edges_n_adj[i % 3])] = True
-                    singular_entries[(edges_n_adj[i % 3], edges_m_adj[i // 3])] = True
+                    singular_entries[(edges_m[i // 3], edges_n[i % 3])] = True
+
+        # # Find all EA facets (remove self facet)
+        # # ea_facets is ordered the same way as edges_m
+        # ea_facets = meshdata.edge2facet[edges_m]
+        # ea_facets = ea_facets[ea_facets != facet_P]
+        # for e_local, facet_Q in enumerate(ea_facets):
+
+        #     # Each facet pair is only done once due to symmetry
+        #     if (max(facet_P, facet_Q), min(facet_P, facet_Q)) in facetpairs_done:
+        #         if (max(facet_P, facet_Q), min(facet_P, facet_Q)) in facetpairs_done2:
+        #             continue
+        #         else:
+        #             facetpairs_done2.add((max(facet_P, facet_Q), min(facet_P, facet_Q)))
+        #     else:
+        #         facetpairs_done.add((max(facet_P, facet_Q), min(facet_P, facet_Q)))
+
+        #     # Verts in facet P are cyclically permuted according to the edge local index in facet P
+        #     local_roll_P = _np.roll(_np.arange(3), 2-e_local)
+        #     if meshdata.facet_flips[facet_P] == -1:
+        #         local_roll_P[[0, 1]] = local_roll_P[[1, 0]]
+        #     edges_m_adj = edges_m[local_roll_P]
+
+        #     verts_Q = meshdata.facet2vert[facet_Q]
+        #     edges_n = meshdata.facet2edge[facet_Q]
+
+        #     # Verts in facet Q are permuted in a more complicated way
+        #     local_roll_Q = _np.empty(3, dtype=_np.int32)
+        #     local_roll_Q[0] = _np.where(verts_Q == verts_P[local_roll_P][1])[0]
+        #     local_roll_Q[1] = _np.where(verts_Q == verts_P[local_roll_P][0])[0]
+        #     local_roll_Q[2] = _np.setdiff1d(_np.arange(3), local_roll_Q[:2])
+        #     edges_n_adj = edges_n[local_roll_Q]
+
+        #     r_coords_adj = r_coords[local_roll_P]
+        #     r4 = meshdata.vert_coords[verts_Q[local_roll_Q][2]]
+
+        #     # Find signs of RWG corresponding to edge_n in facet_Q. Also roll signs_m
+        #     signs_m_adj = signs_m[local_roll_P]
+        #     signs_n_adj = _np.empty((3,), dtype=_np.int32)
+        #     for i, e in enumerate(edges_n_adj):
+        #         signs_n_adj[i] = meshdata.edge_facet_signs[e, meshdata.edge2facet[e] == facet_Q][0]
+
+        #     rows = [edges_m_adj[i // 3] for i in range(9)]
+        #     cols = [edges_n_adj[i % 3] for i in range(9)]
+
+        #     _demcem_bindings.ws_ea_rwg(
+        #         r_coords_adj[0], r_coords_adj[1], r_coords_adj[2], r4, k0,
+        #         N_quad, N_quad, sing_vals
+        #     )
+        #     L_rows += rows
+        #     L_cols += cols
+        #     L_vals += [
+        #         sing_vals[i] / 4 / _np.pi * signs_m_adj[i // 3] * signs_n_adj[i % 3]
+        #         / meshdata.edge_lengths[edges_m_adj[i // 3]]
+        #         / meshdata.edge_lengths[edges_n_adj[i % 3]]
+        #         for i in range(9)
+        #     ]
+
+        #     # # Symmetric part
+        #     # L_rows += cols
+        #     # L_cols += rows
+        #     # L_vals += L_vals[-9:]
+
+        #     _demcem_bindings.ss_ea_rwg(
+        #         r_coords_adj[0], r_coords_adj[1], r_coords_adj[2], r4, k0,
+        #         N_quad, N_quad, sing_vals
+        #     )
+        #     K_rows += rows
+        #     K_cols += cols
+        #     K_vals += [
+        #         - sing_vals[i] / 4 / _np.pi * signs_m_adj[i // 3] * signs_n_adj[i % 3]
+        #         / meshdata.edge_lengths[edges_m_adj[i // 3]]
+        #         / meshdata.edge_lengths[edges_n_adj[i % 3]]
+        #         for i in range(9)
+        #     ]
+
+        #     # # Symmetric part
+        #     # K_rows += cols
+        #     # K_cols += rows
+        #     # K_vals += K_vals[-9:]
+
+        #     for i in range(9):
+        #         singular_entries[(edges_m_adj[i // 3], edges_n_adj[i % 3])] = True
+        #         # singular_entries[(edges_n_adj[i % 3], edges_m_adj[i // 3])] = True
+
+        # # Find all VA facets
+        # for v in verts_P:
+        #     for facet_Q in vert2facet.links(v):
+
+        #         # Each facet pair is only done once due to symmetry
+        #         if (max(facet_P, facet_Q), min(facet_P, facet_Q)) in facetpairs_done:
+        #             if (max(facet_P, facet_Q), min(facet_P, facet_Q)) in facetpairs_done2:
+        #                 continue
+        #             else:
+        #                 facetpairs_done2.add((max(facet_P, facet_Q), min(facet_P, facet_Q)))
+        #         else:
+        #             facetpairs_done.add((max(facet_P, facet_Q), min(facet_P, facet_Q)))
+
+        #         # Verts in facet P are permuted according to the local index of common vert
+        #         v_loc_P = _np.where(verts_P == v)[0][0]
+        #         local_roll_P = _np.roll(_np.arange(3), -v_loc_P)
+        #         if meshdata.facet_flips[facet_P] == -1:
+        #             local_roll_P[[1, 2]] = local_roll_P[[2, 1]]
+        #         edges_m_adj = edges_m[local_roll_P]
+
+        #         verts_Q = meshdata.facet2vert[facet_Q]
+        #         edges_n = meshdata.facet2edge[facet_Q]
+
+        #         # Similar for verts in facet Q but there is also a flip
+        #         verts_Q = meshdata.facet2vert[facet_Q]
+        #         v_loc_Q = _np.where(verts_Q == v)[0][0]
+        #         local_roll_Q = _np.roll(_np.arange(3), -v_loc_Q)
+        #         if meshdata.facet_flips[facet_Q] == 1:
+        #             local_roll_Q[[1, 2]] = local_roll_Q[[2, 1]]
+        #         edges_n_adj = edges_n[local_roll_Q]
+
+        #         r_coords_adj = r_coords[local_roll_P]
+        #         r4 = meshdata.vert_coords[verts_Q[local_roll_Q][1]]
+        #         r5 = meshdata.vert_coords[verts_Q[local_roll_Q][2]]
+
+        #         # Find signs of RWG corresponding to edge_n in facet_Q. Also roll signs_m
+        #         signs_m_adj = signs_m[local_roll_P]
+        #         signs_n_adj = _np.empty((3,), dtype=_np.int32)
+        #         for i, e in enumerate(edges_n_adj):
+        #             signs_n_adj[i] = meshdata.edge_facet_signs[e, meshdata.edge2facet[e] == facet_Q][0]
+
+        #         rows = [edges_m_adj[i // 3] for i in range(9)]
+        #         cols = [edges_n_adj[i % 3] for i in range(9)]
+
+        #         _demcem_bindings.ws_va_rwg(
+        #             r_coords_adj[0], r_coords_adj[1], r_coords_adj[2], r4, r5, k0,
+        #             N_quad, N_quad, N_quad, sing_vals
+        #         )
+        #         L_rows += rows
+        #         L_cols += cols
+        #         L_vals += [
+        #             sing_vals[i] / 4 / _np.pi * signs_m_adj[i // 3] * signs_n_adj[i % 3]
+        #             / meshdata.edge_lengths[edges_m_adj[i // 3]]
+        #             / meshdata.edge_lengths[edges_n_adj[i % 3]]
+        #             for i in range(9)
+        #         ]
+
+        #         # # Symmetric part
+        #         # L_rows += cols
+        #         # L_cols += rows
+        #         # L_vals += L_vals[-9:]
+
+        #         _demcem_bindings.ss_va_rwg(
+        #             r_coords_adj[0], r_coords_adj[1], r_coords_adj[2], r4, r5, k0,
+        #             N_quad, N_quad, N_quad, sing_vals
+        #         )
+        #         K_rows += rows
+        #         K_cols += cols
+        #         K_vals += [
+        #             - sing_vals[i] / 4 / _np.pi * signs_m_adj[i // 3] * signs_n_adj[i % 3]
+        #             / meshdata.edge_lengths[edges_m_adj[i // 3]]
+        #             / meshdata.edge_lengths[edges_n_adj[i % 3]]
+        #             for i in range(9)
+        #         ]
+
+        #         # # Symmetric part
+        #         # K_rows += cols
+        #         # K_cols += rows
+        #         # K_vals += K_vals[-9:]
+
+        #         for i in range(9):
+        #             singular_entries[(edges_m_adj[i // 3], edges_n_adj[i % 3])] = True
+        #             # singular_entries[(edges_n_adj[i % 3], edges_m_adj[i // 3])] = True
 
     # Compute "leftover" elements included in terms containing singularity but which corresponds to
     # facets neither ST, EA or VA. The method is not very optimized, but should at least not be
@@ -665,12 +847,16 @@ def _compute_singularities_KL_operators(
             (_np.array(B_vals), (_np.array(B_rows), _np.array(B_cols))), shape=(num_edges, num_edges)
         ).tocsc()
 
-    K_singular = K_self + _sparse.coo_array(
+    K_singular = _sparse.coo_array(
         (_np.array(K_vals), (_np.array(K_rows), _np.array(K_cols))), shape=(num_edges, num_edges)
     ).tocsc()
     L_singular = _sparse.coo_array(
         (_np.array(L_vals), (_np.array(L_rows), _np.array(L_cols))), shape=(num_edges, num_edges)
     ).tocsc()
+
+    # L_singular = (L_singular + L_singular.T) / 2
+    # K_singular = (K_singular + K_singular.T) / 2
+    K_singular += K_self
 
     if gen_preconditioner:
         K_prec = K_self

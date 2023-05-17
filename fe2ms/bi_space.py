@@ -45,8 +45,7 @@ class BIMeshData:
         self.facet2edge = bi_mesh.topology.connectivity(2,1).array.reshape((-1,3))
 
         self.facet_normals, self.facet_areas, self.facet_flips = _get_boundary_facet_info(
-            fe_space, self.vert_coords, self.edge2vert, self.facet2edge, self.facet2vert,
-            bi_to_fe_facets, ext_facets
+            fe_space, self.vert_coords, self.facet2vert, bi_to_fe_facets, ext_facets
         )
 
         bi_mesh.topology.create_entity_permutations()
@@ -93,8 +92,7 @@ class BIBasisData:
 
 
 def _get_boundary_facet_info(
-    fe_space, bi_vert_coords, bi_edge2vert, bi_facet2edge, bi_facet2vert,
-    bi_to_fe_facets, ext_facets
+    fe_space, bi_vert_coords, bi_facet2vert, bi_to_fe_facets, ext_facets
 ):
 
     # Lengthy code to project facet normals into a simple CG vector function space. These normals
@@ -144,8 +142,8 @@ def _get_boundary_facet_info(
     solver.solve(b, nh.vector)
 
     # Compute normals and facet areas from edges
-    e0 = _np.diff(bi_vert_coords[bi_edge2vert[bi_facet2edge[:,0]]], axis=1).squeeze()
-    e1 = _np.diff(bi_vert_coords[bi_edge2vert[bi_facet2edge[:,1]]], axis=1).squeeze()
+    e0 = _np.diff(bi_vert_coords[bi_facet2vert[:,1:]], axis=1).squeeze()
+    e1 = _np.diff(bi_vert_coords[bi_facet2vert[:,[2,0]]], axis=1).squeeze()
     normals = _np.cross(e0, e1)
     areas = _linalg.norm(normals, axis=1, keepdims=True)
     normals /= areas
