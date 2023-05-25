@@ -443,6 +443,8 @@ def _compute_singularities_KL_operators(
         # positive outward normal.
         if meshdata.facet_flips[facet_P] < 0:
             local_order = _np.array([1,0,2], dtype=_np.int32)
+        else:
+            local_order = _np.arange(3, dtype=_np.int32)
 
         edges_m = meshdata.facet2edge[facet_P][local_order]
 
