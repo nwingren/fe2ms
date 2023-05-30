@@ -215,6 +215,10 @@ def facet_contrib_KL_operators(
 def assemble_B_integral(
     basis, quad_weights, facet2edge, edge2facet, facet_areas, facet_normals
 ):
+    """
+    Assemble integral part of B matrix, i.e. B matrix without the factor jk0.
+    """
+
     rows = []
     cols = []
     vals = []
@@ -243,68 +247,6 @@ def assemble_B_integral(
                 rows.append(facet2edge[facet, i_edge_n])
                 cols.append(facet2edge[facet, i_edge_m])
                 vals.append(-integral * jacobian)
-
-    rows_array = _np.zeros(len(vals), dtype=_np.int64)
-    cols_array = _np.zeros(len(vals), dtype=_np.int64)
-    B_array = _np.zeros(len(vals))
-    for i in range(len(rows)): # pylint: disable=consider-using-enumerate
-        rows_array[i] = rows[i]
-        cols_array[i] = cols[i]
-        B_array[i] = vals[i]
-
-    return rows_array, cols_array, B_array
-
-
-@_nb.jit(nopython=True, fastmath=True, error_model='numpy')
-def assemble_K_self(
-    basis, quad_weights, facet2edge, edge2facet, facet_areas, facet_normals, edge_lengths
-):
-    rows = []
-    cols = []
-    vals = []
-
-    for facet in range(facet2edge.shape[0]):
-        jacobian = 2 * facet_areas[facet]
-
-        numerator = 0.
-        denominator = 0.
-        for i_edge in range(3):
-            i_facet = _np.where(edge2facet[facet2edge[facet, i_edge]]==facet)[0][0]
-            neigh_facet = edge2facet[facet2edge[facet, i_edge], i_facet]
-
-            # Floating point errors can become an issue for arccos
-            scalprod = facet_normals[facet] @ facet_normals[neigh_facet]
-            if scalprod > 1:
-                theta = 0.
-            else:
-                theta = _np.arccos(scalprod)
-            numerator += edge_lengths[facet2edge[facet, i_edge]] * 2 * (_np.pi + theta)
-            denominator += edge_lengths[facet2edge[facet, i_edge]]
-
-        solid_angle_factor = 1 - numerator / denominator / 4 / _np.pi
-
-        for i_edge_m in range(3):
-            i_facet_m = _np.where(edge2facet[facet2edge[facet, i_edge_m]]==facet)[0][0]
-            for i_edge_n in range(i_edge_m, 3):
-                integral = 0.
-                i_facet_n = _np.where(edge2facet[facet2edge[facet, i_edge_n]]==facet)[0][0]
-                for i_quad in range(quad_weights.shape[0]):
-                    for i_coord in range(3):
-                        integral += facet_normals[facet, i_coord] * (
-                            basis[facet2edge[facet, i_edge_m], i_facet_m, i_quad, (i_coord+1)%3]
-                            * basis[facet2edge[facet, i_edge_n], i_facet_n, i_quad, (i_coord-1)%3]
-                            - basis[facet2edge[facet, i_edge_m], i_facet_m, i_quad, (i_coord-1)%3]
-                            * basis[facet2edge[facet, i_edge_n], i_facet_n, i_quad, (i_coord+1)%3]
-                        ) * quad_weights[i_quad]
-
-                rows.append(facet2edge[facet, i_edge_m])
-                cols.append(facet2edge[facet, i_edge_n])
-                vals.append(integral * jacobian * solid_angle_factor)
-
-                # Skew-symmetric part
-                rows.append(facet2edge[facet, i_edge_n])
-                cols.append(facet2edge[facet, i_edge_m])
-                vals.append(-integral * jacobian * solid_angle_factor)
 
     rows_array = _np.zeros(len(vals), dtype=_np.int64)
     cols_array = _np.zeros(len(vals), dtype=_np.int64)

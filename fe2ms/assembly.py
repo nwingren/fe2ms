@@ -420,7 +420,6 @@ def _compute_singularities_KL_operators(
     )
 
     facetpairs_done = set()
-    facetpairs_done2 = set()
 
     if gen_preconditioner:
         Lp_rows = []
@@ -437,7 +436,6 @@ def _compute_singularities_KL_operators(
     for facet_P, verts_P in enumerate(meshdata.facet2vert):
 
         facetpairs_done.add((facet_P, facet_P))
-        facetpairs_done2.add((facet_P, facet_P))
 
         # Switch order of vertices if this does not correspond to ordering associated with
         # positive outward normal.
@@ -480,8 +478,11 @@ def _compute_singularities_KL_operators(
 
             facet_Q = facets[facets != facet_P][0]
 
+            # Each facet pair is only done once due to symmetry
+            if (max(facet_P, facet_Q), min(facet_P, facet_Q)) in facetpairs_done:
+                continue
+
             facetpairs_done.add((max(facet_P, facet_Q), min(facet_P, facet_Q)))
-            facetpairs_done2.add((max(facet_P, facet_Q), min(facet_P, facet_Q)))
 
             # Vertices attached to edge, but not in the correct order
             vert_1, vert_2 = meshdata.edge2vert[edge]
@@ -543,6 +544,11 @@ def _compute_singularities_KL_operators(
                 for i in range(9)
             ]
 
+            # Symmetric part
+            L_rows += cols
+            L_cols += rows
+            L_vals += L_vals[-9:]
+
             _demcem_bindings.ss_ea_rwg(
                 meshdata.vert_coords[vert_1], meshdata.vert_coords[vert_2],
                 meshdata.vert_coords[vert_3], meshdata.vert_coords[vert_4],
@@ -557,20 +563,26 @@ def _compute_singularities_KL_operators(
                 for i in range(9)
             ]
 
+            # Symmetric part
+            K_rows += cols
+            K_cols += rows
+            K_vals += K_vals[-9:]
+
             for i in range(9):
                 singular_entries[(edges_m[i // 3], edges_n[i % 3])] = True
+                singular_entries[(edges_n[i // 3], edges_m[i % 3])] = True
+
 
     # Compute vertex adjacent terms
     for vert_1 in range(meshdata.vert_coords.shape[0]):
         for facet_P in vert2facet.links(vert_1):
             for facet_Q in vert2facet.links(vert_1):
 
+                # Each facet pair is only done once due to symmetry
                 if (max(facet_P, facet_Q), min(facet_P, facet_Q)) in facetpairs_done:
-                    if (max(facet_P, facet_Q), min(facet_P, facet_Q)) in facetpairs_done2:
-                        continue
-                    facetpairs_done2.add((max(facet_P, facet_Q), min(facet_P, facet_Q)))
-                else:
-                    facetpairs_done.add((max(facet_P, facet_Q), min(facet_P, facet_Q)))
+                    continue
+
+                facetpairs_done.add((max(facet_P, facet_Q), min(facet_P, facet_Q)))
 
                 # Non-common vertex indices according to DEMCEM (not adjusted for normal flips)
                 loc_common_P = _np.nonzero(meshdata.facet2vert[facet_P] == vert_1)[0][0]
@@ -579,9 +591,6 @@ def _compute_singularities_KL_operators(
                 vert_3 = meshdata.facet2vert[facet_P][(loc_common_P + 2) % 3]
                 vert_5 = meshdata.facet2vert[facet_Q][(loc_common_Q + 1) % 3]
                 vert_4 = meshdata.facet2vert[facet_Q][(loc_common_Q + 2) % 3]
-
-                # vert_2, vert_3 = meshdata.facet2vert[facet_P][meshdata.facet2vert[facet_P] != vert_1]
-                # vert_4, vert_5 = meshdata.facet2vert[facet_Q][meshdata.facet2vert[facet_Q] != vert_1]
 
                 # Switch order of non-common vertices if this does not correspond to ordering
                 # associated with positive outward normal.
@@ -626,6 +635,11 @@ def _compute_singularities_KL_operators(
                     for i in range(9)
                 ]
 
+                # Symmetric part
+                L_rows += cols
+                L_cols += rows
+                L_vals += L_vals[-9:]
+
                 _demcem_bindings.ss_va_rwg(
                     meshdata.vert_coords[vert_1], meshdata.vert_coords[vert_2],
                     meshdata.vert_coords[vert_3], meshdata.vert_coords[vert_4],
@@ -640,8 +654,14 @@ def _compute_singularities_KL_operators(
                     for i in range(9)
                 ]
 
+                # Symmetric part
+                K_rows += cols
+                K_cols += rows
+                K_vals += K_vals[-9:]
+
                 for i in range(9):
                     singular_entries[(edges_m[i // 3], edges_n[i % 3])] = True
+                    singular_entries[(edges_n[i // 3], edges_m[i % 3])] = True
 
     # Compute "leftover" elements included in terms containing singularity but which corresponds to
     # facets neither ST, EA or VA. The method is not very optimized, but should at least not be
@@ -689,8 +709,6 @@ def _compute_singularities_KL_operators(
         (_np.array(L_vals), (_np.array(L_rows), _np.array(L_cols))), shape=(num_edges, num_edges)
     ).tocsc()
 
-    # L_singular = (L_singular + L_singular.T) / 2
-    # K_singular = (K_singular + K_singular.T) / 2
     K_singular += K_self
 
     if gen_preconditioner:
