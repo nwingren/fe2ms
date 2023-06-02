@@ -20,6 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import numpy as _np
 from scipy import sparse as _sparse
 from scipy.sparse import linalg as _sparse_linalg
+from petsc4py import PETSc as _PETSc
 
 from fe2ms.systems import FEBISystem as _FEBISystem
 
@@ -105,9 +106,8 @@ def iterative_ilu(
 
     Returns
     -------
-    M : LinearOperator
-        Linear operator acting as an approximaiton to the invese if applied
-        in a matrix-vector-product.
+    M : function
+        Solve function which applies the preconditioner to a vector.
     """
 
     if solver is None:
@@ -134,6 +134,104 @@ def iterative_ilu(
                 'Inner loop (preconditioning) did not converge'
             )
         return M_prec_inner.solve(psol)
+
+    return precfun
+
+
+def iterative_petsc(
+    system: _FEBISystem, scale=None,
+    solver=_PETSc.KSP.Type.LGMRES, solver_tol=1e-7, # pylint: disable=no-member
+    inner_prec=_PETSc.PC.Type.SOR, inner_prec_side=_PETSc.PC.Side.RIGHT, # pylint: disable=no-member
+    petsc_options={}
+):
+    """
+    Sparse approximation preconditioner with iterative computation using PETSc.
+
+    Uses sparsified BI blocks where only interactions within single triangles are included.
+    A sparse approximation to the system matrix is constructed from these as well as the already
+    sparse FE blocks. The approximation to the inverse is applied through iterative solution each
+    time the preconditioner is applied to a vector. PETSc is used for this purpose, with many
+    different preconditioners and solvers possible to use.
+
+    Note that this preconditioner is only intended for very large systems. For many cases, direct()
+    has performed much better.
+
+    Parameters
+    ----------
+    
+    system : FEBISystem
+        System to precondition.
+    scale : complex, optional
+        Factor to scale sparisifed blocks by, by default None.
+        If None, EFIE formulations are scaled by -2jk0 while EJ formulation is unscaled.
+    solver : str, optional
+        Iterative solver to use, by default LGMRES. Possilbe solver identifiers are
+        found in petsc4py.PETSc.KSP.Type.
+    solver_tol : float, optional
+        (Relative) tolerance of iterative solver, by default 1e-7.
+    inner_prec : str, optional
+        Preconditioner to use in the PETSc solver, by default SOR. Possilbe preconditioner
+        identifiers are found in petsc4py.PETSc.PC.Type.
+    inner_prec_side : int, optional
+        Side to use for the inner preconditioner, by default RIGHT. Possible sides are
+        petsc4py.PETSc.PC.Side.{LEFT, RIGHT, SYMMETRIC}.
+    petsc_options : dict, optional
+        Option dict for PETSc solver and preconditioner, by default empty dict.
+
+    Returns
+    -------
+    M : function
+        Solve function which applies the preconditioner to a vector.
+    """
+
+    sparse_mat = _make_sparse_mat(
+        system._formulation, system._k0, system._system_blocks, system.spaces,
+        system.K_prec, system.L_prec, scale
+    )
+
+    if len(petsc_options) > 0:
+        options_prefix = f'iterative_prec_{id(sparse_mat)}'
+        options = _PETSc.Options() # pylint: disable=no-member
+        options.prefixPush(options_prefix)
+        for k, v in petsc_options.items():
+            options[k] = v
+        options.prefixPop()
+
+    sparse_mat = _PETSc.Mat().createAIJ( # pylint: disable=no-member
+        size=sparse_mat.shape, csr=(sparse_mat.indptr, sparse_mat.indices, sparse_mat.data)
+    )
+    if len(petsc_options) > 0:
+        sparse_mat.setOptionsPrefix(options_prefix)
+        sparse_mat.setFromOptions()
+
+    pc = _PETSc.PC() # pylint: disable=no-member
+    pc.create()
+    pc.setType(inner_prec)
+    pc.setOperators(sparse_mat)
+    pc.setReusePreconditioner(True)
+    if len(petsc_options) > 0:
+        pc.setOptionsPrefix(options_prefix)
+        pc.setFromOptions()
+    pc.setUp()
+
+    ksp = _PETSc.KSP() # pylint: disable=no-member
+    ksp.create(comm=sparse_mat.getComm())
+    ksp.setType(solver)
+    ksp.setPC(pc)
+    ksp.setPCSide(inner_prec_side)
+    ksp.setOperators(sparse_mat)
+    ksp.setTolerances(atol=0, rtol=solver_tol)
+    if len(petsc_options) > 0:
+        ksp.setOptionsPrefix(options_prefix)
+        ksp.setFromOptions()
+
+    def precfun(x):
+        sol_vec, rhs_vec = sparse_mat.createVecs()
+        rhs_vec[:] = x
+
+        ksp.solve(rhs_vec, sol_vec)
+        print(f'Preconditioned: {ksp.getIterationNumber()} iters, {ksp.getConvergedReason()}')
+        return sol_vec[:]
 
     return precfun
 
