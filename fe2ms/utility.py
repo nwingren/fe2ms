@@ -279,13 +279,20 @@ class ComputationVolume():
 
             # Set values across cell tags in mesh
             for tag, mat in self.materials.items():
-                cells = self.cell_tags.indices[self.cell_tags.values==tag]
+
+                # If some materials don't have xi/zeta their value is set to 0
+                if len(mat) == 4:
+                    xi_mat = mat[2]
+                else:
+                    xi_mat = 0
 
                 # Since anisotropic materials are present, even isotropic materials are tensors
-                if _np.isscalar(mat[2]):
-                    tensor_mat = mat[2] * _np.eye(3).ravel()
+                if _np.isscalar(xi_mat):
+                    tensor_mat = xi_mat * _np.eye(3).ravel()
                 else:
-                    tensor_mat = mat[2].ravel()
+                    tensor_mat = xi_mat.ravel()
+
+                cells = self.cell_tags.indices[self.cell_tags.values==tag]
 
                 # Each subspace (tensor component) is set separately
                 for subspace, component in zip(Qsub, tensor_mat):
@@ -298,8 +305,15 @@ class ComputationVolume():
 
             # Set values across cell tags in mesh
             for tag, mat in self.materials.items():
+
+                # If some materials don't have xi/zeta their value is set to 0
+                if len(mat) == 4:
+                    xi_mat = mat[2]
+                else:
+                    xi_mat = 0
+
                 cells = self.cell_tags.indices[self.cell_tags.values==tag]
-                xi.x.array[cells] = mat[2]
+                xi.x.array[cells] = xi_mat
 
         return xi
 
@@ -331,13 +345,20 @@ class ComputationVolume():
 
             # Set values across cell tags in mesh
             for tag, mat in self.materials.items():
-                cells = self.cell_tags.indices[self.cell_tags.values==tag]
+
+                # If some materials don't have xi/zeta their value is set to 0
+                if len(mat) == 4:
+                    zeta_mat = mat[3]
+                else:
+                    zeta_mat = 0
 
                 # Since anisotropic materials are present, even isotropic materials are tensors
-                if _np.isscalar(mat[3]):
-                    tensor_mat = mat[3] * _np.eye(3).ravel()
+                if _np.isscalar(zeta_mat):
+                    tensor_mat = zeta_mat * _np.eye(3).ravel()
                 else:
-                    tensor_mat = mat[3].ravel()
+                    tensor_mat = zeta_mat.ravel()
+                
+                cells = self.cell_tags.indices[self.cell_tags.values==tag]
 
                 # Each subspace (tensor component) is set separately
                 for subspace, component in zip(Qsub, tensor_mat):
@@ -350,8 +371,15 @@ class ComputationVolume():
 
             # Set values across cell tags in mesh
             for tag, mat in self.materials.items():
+
+                # If some materials don't have xi/zeta their value is set to 0
+                if len(mat) == 4:
+                    zeta_mat = mat[3]
+                else:
+                    zeta_mat = 0
+
                 cells = self.cell_tags.indices[self.cell_tags.values==tag]
-                zeta.x.array[cells] = mat[3]
+                zeta.x.array[cells] = zeta_mat
 
         return zeta
 
