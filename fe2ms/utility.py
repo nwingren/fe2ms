@@ -265,7 +265,7 @@ class ComputationVolume():
             tensor element such that the tensor components are constant within mesh elements.
         """
 
-        # Return zero-function if the material is not bi-isotropic/bi-anisotropic
+        # Return zero-function if no material is bi-isotropic/bi-anisotropic
         if not self.bi_material:
             Q = _dolfinx.fem.FunctionSpace(self.mesh, ('DG', 0))
             return _dolfinx.fem.Function(Q)
@@ -331,7 +331,7 @@ class ComputationVolume():
             tensor element such that the tensor components are constant within mesh elements.
         """
 
-        # Return zero-function if the material is not bi-isotropic/bi-anisotropic
+        # Return zero-function if no material is bi-isotropic/bi-anisotropic
         if not self.bi_material:
             Q = _dolfinx.fem.FunctionSpace(self.mesh, ('DG', 0))
             return _dolfinx.fem.Function(Q)
