@@ -274,10 +274,10 @@ def _make_sparse_mat(formulation, k0, system_blocks, spaces, K_prec, L_prec, sca
         sparse_mat = _sparse.bmat(
             [
                 [K_II, K_IS, None],
-                [K_SI, K_SS + 1j * k0 * scale * L_prec, -1j * k0 * scale * K_prec],
-                [None, -1j * k0 * scale * K_prec.T, -1j * k0 * scale * L_prec]
+                [K_SI, K_SS + 1j * k0 * scale * L_prec, -1j * k0 * scale * K_prec.T],
+                [None, -1j * k0 * scale * K_prec, -1j * k0 * scale * L_prec]
             ],
             'csc'
         )
-    
+
     return sparse_mat

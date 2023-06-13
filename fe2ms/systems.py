@@ -489,8 +489,7 @@ class FEBISystemFull(FEBISystem):
 
             # Boundary integral matrices
             P_matrix, Q_matrix, self.K_prec, self.L_prec = _assembly.assemble_bi_blocks_full(
-                self._formulation, self._k0, self.spaces.bi_meshdata, self.spaces.bi_basisdata,
-                quad_order_singular
+                self._k0, self.spaces.bi_meshdata, self.spaces.bi_basisdata, quad_order_singular
             )
 
             # Save block data
@@ -524,8 +523,8 @@ class FEBISystemFull(FEBISystem):
             elif self._formulation == 'ej':
                 blocks = [
                     [K_II, K_IS, None],
-                    [K_SI, K_SS + 1j * self._k0 * Q_matrix, -1j * self._k0 * P_matrix],
-                    [None, -1j * self._k0 * P_matrix.T, -1j * self._k0 * Q_matrix]
+                    [K_SI, K_SS + 1j * self._k0 * Q_matrix, -1j * self._k0 * P_matrix.T],
+                    [None, -1j * self._k0 * P_matrix, -1j * self._k0 * Q_matrix]
                 ]
                 blocks[1][1] = blocks[1][1].toarray()
             blocks[0][0] = blocks[0][0].toarray()
@@ -587,8 +586,8 @@ class FEBISystemFull(FEBISystem):
             elif self._formulation == 'ej':
                 blocks = [
                     [K_II, K_IS, None],
-                    [K_SI, K_SS + 1j * self._k0 * self._system_blocks.Q, -1j * self._k0 * self._system_blocks.P],
-                    [None, -1j * self._k0 * self._system_blocks.P.T, -1j * self._k0 * self._system_blocks.Q]
+                    [K_SI, K_SS + 1j * self._k0 * self._system_blocks.Q, -1j * self._k0 * self._system_blocks.P.T],
+                    [None, -1j * self._k0 * self._system_blocks.P, -1j * self._k0 * self._system_blocks.Q]
                 ]
                 blocks[1][1] = blocks[1][1].toarray()
             blocks[0][0] = blocks[0][0].toarray()
@@ -718,8 +717,8 @@ class FEBISystemFull(FEBISystem):
                         K_II @ x[:in_size] + K_IS @ x[in_size:-bi_size],
                         K_SI @ x[:in_size] + K_SS @ x[in_size:-bi_size]
                         + 1j * self._k0 * self._system_blocks.Q @ x[in_size:-bi_size]
-                        - 1j * self._k0 * self._system_blocks.P @ x[-bi_size:],
-                        - 1j * self._k0 * self._system_blocks.P.T @ x[in_size:-bi_size]
+                        - 1j * self._k0 * self._system_blocks.P.T @ x[-bi_size:],
+                        - 1j * self._k0 * self._system_blocks.P @ x[in_size:-bi_size]
                         - 1j * self._k0 * self._system_blocks.Q @ x[-bi_size:]
                     ))
             else:
@@ -728,8 +727,8 @@ class FEBISystemFull(FEBISystem):
                         K_II @ x[:in_size] + K_IS @ x[in_size:-bi_size],
                         K_SI @ x[:in_size] + K_SS @ x[in_size:-bi_size]
                         + 1j * self._k0 * self._system_blocks.Q @ x[in_size:-bi_size]
-                        - 1j * self._k0 * self._system_blocks.P @ x[-bi_size:],
-                        - 1j * self._k0 * self._system_blocks.P.T @ x[in_size:-bi_size]
+                        - 1j * self._k0 * self._system_blocks.P.T @ x[-bi_size:],
+                        - 1j * self._k0 * self._system_blocks.P @ x[in_size:-bi_size]
                         - 1j * self._k0 * self._system_blocks.Q @ x[-bi_size:]
                     ))
 
@@ -822,9 +821,8 @@ class FEBISystemACA(FEBISystem):
 
         # Boundary integral blocks
         P_near, Q_near, far_operator, self.K_prec, self.L_prec = _assembly.assemble_bi_aca(
-            self._formulation, self._k0, self.spaces.bi_meshdata,
-            self.spaces.bi_basisdata, recompress, target_points, max_points, max_level, tolerance,
-            quad_order_singular
+            self._k0, self.spaces.bi_meshdata, self.spaces.bi_basisdata, recompress,
+            target_points, max_points, max_level, tolerance, quad_order_singular
         )
 
         self._system_blocks = _FEBIBlocks(K_matrix, B_matrix, P_near, Q_near)
@@ -967,12 +965,12 @@ class FEBISystemACA(FEBISystem):
                             + self._far_operator.matvec_Lop(x[in_size:-bi_size])
                         )
                         - 1j * self._k0 * (
-                            self._system_blocks.P @ x[-bi_size:]
-                            + self._far_operator.matvec_Kop(x[-bi_size:])
+                            self._system_blocks.P.T @ x[-bi_size:]
+                            + self._far_operator.matvec_Kop_T(x[-bi_size:])
                         ),
                         - 1j * self._k0 * (
-                            self._system_blocks.P.T @ x[in_size:-bi_size]
-                            + self._far_operator.matvec_Kop_T(x[in_size:-bi_size])
+                            self._system_blocks.P @ x[in_size:-bi_size]
+                            + self._far_operator.matvec_Kop(x[in_size:-bi_size])
                         )
                         - 1j * self._k0 * (
                             self._system_blocks.Q @ x[-bi_size:]
@@ -989,12 +987,12 @@ class FEBISystemACA(FEBISystem):
                             + self._far_operator.matvec_Lop(x[in_size:-bi_size])
                         )
                         - 1j * self._k0 * (
-                            self._system_blocks.P @ x[-bi_size:]
-                            + self._far_operator.matvec_Kop(x[-bi_size:])
+                            self._system_blocks.P.T @ x[-bi_size:]
+                            + self._far_operator.matvec_Kop_T(x[-bi_size:])
                         ),
                         - 1j * self._k0 * (
-                            self._system_blocks.P.T @ x[in_size:-bi_size]
-                            + self._far_operator.matvec_Kop_T(x[in_size:-bi_size])
+                            self._system_blocks.P @ x[in_size:-bi_size]
+                            + self._far_operator.matvec_Kop(x[in_size:-bi_size])
                         )
                         - 1j * self._k0 * (
                             self._system_blocks.Q @ x[-bi_size:]

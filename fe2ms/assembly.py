@@ -121,7 +121,7 @@ def assemble_KB_blocks(
 
 
 def assemble_bi_blocks_full(
-    formulation, k0, meshdata: _bi_space.BIMeshData, basisdata: _bi_space.BIBasisData,
+    k0, meshdata: _bi_space.BIMeshData, basisdata: _bi_space.BIBasisData,
     quad_order_singular
 ):
     """
@@ -130,8 +130,6 @@ def assemble_bi_blocks_full(
 
     Parameters
     ----------
-    formulation : {'is-efie', 'vs-efie', 'ej'}
-        Formulation used (affects K-operator).
     k0 : float
         Free-space wavenumber of problem.
     meshdata : febicode.utility.BIMeshData
@@ -157,16 +155,9 @@ def assemble_bi_blocks_full(
     Kop_matrix = _np.zeros((bi_size, bi_size), dtype=_np.complex128)
     Lop_matrix = _np.zeros((bi_size, bi_size), dtype=_np.complex128)
 
-    if formulation in ('is-efie', 'vs-efie'):
-        Kop_singular, Lop_singular, singular_entries, K_prec, L_prec = _compute_singularities_KL_operators(
-            k0, meshdata, basisdata, quad_order_singular, False, True
-        )
-    elif formulation == 'ej':
-        Kop_singular, Lop_singular, singular_entries, K_prec, L_prec = _compute_singularities_KL_operators(
-            k0, meshdata, basisdata, quad_order_singular, True, True
-        )
-    else:
-        raise NotImplementedError(f'Formulation \'{formulation}\' not implemented')
+    Kop_singular, Lop_singular, singular_entries, K_prec, L_prec = _compute_singularities_KL_operators(
+        k0, meshdata, basisdata, quad_order_singular, True
+    )
 
     _assembly_full.assemble_KL_operators(
         k0, basisdata.basis, basisdata.divs, basisdata.quad_points, basisdata.quad_weights,
@@ -180,7 +171,7 @@ def assemble_bi_blocks_full(
 
 
 def assemble_bi_aca(
-    formulation, k0, meshdata: _bi_space.BIMeshData, basisdata: _bi_space.BIBasisData,
+    k0, meshdata: _bi_space.BIMeshData, basisdata: _bi_space.BIBasisData,
     recompress, target_points, max_points, max_level, tolerance, quad_order_singular
 ):
     """
@@ -191,8 +182,6 @@ def assemble_bi_aca(
 
     Parameters
     ----------
-    formulation : {'is-efie', 'vs-efie', 'ej'}
-        Formulation used (affects K operator).
     k0 : float
         Free-space wavenumber of problem.
     meshdata : febicode.utility.BIMeshData
@@ -263,16 +252,10 @@ def assemble_bi_aca(
 
     u, x, v, w = _tree.find_interaction_lists(balanced_leaves, complete_tree, depth)
 
-    if formulation in ('is-efie', 'vs-efie'):
-        Kop_singular, Lop_singular, singular_entries, K_prec, L_prec = _compute_singularities_KL_operators(
-            k0, meshdata, basisdata, quad_order_singular, False, True
-        )
-    elif formulation == 'ej':
-        Kop_singular, Lop_singular, singular_entries, K_prec, L_prec = _compute_singularities_KL_operators(
-            k0, meshdata, basisdata, quad_order_singular, True, True
-        )
-    else:
-        raise NotImplementedError(f'Formulation \'{formulation}\' not implemented')
+    
+    Kop_singular, Lop_singular, singular_entries, K_prec, L_prec = _compute_singularities_KL_operators(
+        k0, meshdata, basisdata, quad_order_singular, True
+    )
 
     rows, cols, Kop_vals, Lop_vals = _assembly_aca.compute_KL_operators_near_octree(
         k0, basisdata.basis, basisdata.divs, basisdata.quad_points,
@@ -361,7 +344,7 @@ def assemble_rhs(
 
 def _compute_singularities_KL_operators(
     k0, meshdata: _bi_space.BIMeshData, basisdata: _bi_space.BIBasisData,
-    N_quad, on_interior, gen_preconditioner
+    N_quad, gen_preconditioner
 ):
     """
     Computes singular integrals for all edges using DEMCEM (https://github.com/thanospol/DEMCEM).
@@ -387,9 +370,6 @@ def _compute_singularities_KL_operators(
         Basis data for the BI problem.
     N_quad : int
         Quadrature order to use in DEMCEM singular integral computations.
-    on_interior : bool
-        Whether operators are on the interior of a computational volume. Affects sign of extracted
-        K singularity.
     gen_preconditioner : bool
         Whether to generate sparsified operators for preconditioner. Will add two outputs.
 
@@ -693,14 +673,9 @@ def _compute_singularities_KL_operators(
         basisdata.basis, basisdata.quad_weights,
         meshdata.facet2edge, meshdata.edge2facet, meshdata.facet_areas, meshdata.facet_normals
     )
-    if on_interior:
-        K_self = -1/2 * _sparse.coo_array(
-            (_np.array(B_vals), (_np.array(B_rows), _np.array(B_cols))), shape=(num_edges, num_edges)
-        ).tocsc()
-    else:
-        K_self = 1/2 * _sparse.coo_array(
-            (_np.array(B_vals), (_np.array(B_rows), _np.array(B_cols))), shape=(num_edges, num_edges)
-        ).tocsc()
+    K_self = 1/2 * _sparse.coo_array(
+        (_np.array(B_vals), (_np.array(B_rows), _np.array(B_cols))), shape=(num_edges, num_edges)
+    ).tocsc()
 
     K_singular = _sparse.coo_array(
         (_np.array(K_vals), (_np.array(K_rows), _np.array(K_cols))), shape=(num_edges, num_edges)
