@@ -20,6 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import numpy as _np
 from scipy import sparse as _sparse
 from scipy.sparse import linalg as _sparse_linalg
+from scipy.constants import epsilon_0 as _eps0, mu_0 as _mu0
 from petsc4py import PETSc as _PETSc
 
 from fe2ms.systems import FEBISystem as _FEBISystem
@@ -271,11 +272,12 @@ def _make_sparse_mat(formulation, k0, system_blocks, spaces, K_prec, L_prec, sca
             'csc'
         )
     elif formulation == 'ej':
+        eta0 = _np.sqrt(_mu0 / _eps0)
         sparse_mat = _sparse.bmat(
             [
                 [K_II, K_IS, None],
-                [K_SI, K_SS + 1j * k0 * scale * L_prec, -1j * k0 * scale * K_prec.T],
-                [None, -1j * k0 * scale * K_prec, -1j * k0 * scale * L_prec]
+                [K_SI, K_SS + 1j * k0 * scale * L_prec, -1j * k0 * eta0 * scale * K_prec.T],
+                [None, -1j * k0 * eta0 * scale * K_prec, -1j * k0 * eta0**2 * scale * L_prec]
             ],
             'csc'
         )

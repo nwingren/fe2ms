@@ -28,7 +28,7 @@ import numpy as _np
 from scipy import linalg as _linalg
 from scipy import sparse as _sparse
 from scipy.sparse import linalg as _sparse_linalg
-from scipy.constants import speed_of_light as _c0
+from scipy.constants import speed_of_light as _c0, epsilon_0 as _eps0, mu_0 as _mu0
 
 import dolfinx as _dolfinx
 
@@ -248,7 +248,9 @@ class FEBISystem:
         if self._formulation in ('is-efie', 'vs-efie'):
             self._rhs = _np.concatenate((_np.zeros(self.spaces.fe_size), b_inc))
         elif self._formulation == 'ej':
-            self._rhs = _np.concatenate((_np.zeros(self.spaces.fe_size - self.spaces.bi_size), b_inc))
+            self._rhs = _np.concatenate(
+                (_np.zeros(self.spaces.fe_size - self.spaces.bi_size), b_inc)
+            )
 
 
     # TODO: Add cartesian coordinate version of this (and of rcs)
@@ -521,10 +523,11 @@ class FEBISystemFull(FEBISystem):
                     [P_matrix @ self.spaces.T_SV, Q_matrix]
                 ]
             elif self._formulation == 'ej':
+                eta0 = _np.sqrt(_mu0 / _eps0)
                 blocks = [
                     [K_II, K_IS, _np.zeros(K_IS.shape)],
-                    [K_SI.toarray(), K_SS + 1j * self._k0 * Q_matrix, -1j * self._k0 * P_matrix.T],
-                    [_np.zeros(K_SI.shape), -1j * self._k0 * P_matrix, -1j * self._k0 * Q_matrix]
+                    [K_SI.toarray(), K_SS + 1j * self._k0 * Q_matrix, -1j * self._k0 * eta0 * P_matrix.T],
+                    [_np.zeros(K_SI.shape), -1j * self._k0 * eta0 * P_matrix, -1j * self._k0 * eta0**2 * Q_matrix]
                 ]
             blocks[0][0] = blocks[0][0].toarray()
             blocks[0][1] = blocks[0][1].toarray()
@@ -583,10 +586,11 @@ class FEBISystemFull(FEBISystem):
                     [self._system_blocks.P @ self.spaces.T_SV, self._system_blocks.Q]
                 ]
             elif self._formulation == 'ej':
+                eta0 = _np.sqrt(_mu0 / _eps0)
                 blocks = [
                     [K_II, K_IS, _np.zeros(K_IS.shape)],
-                    [K_SI.toarray(), K_SS + 1j * self._k0 * self._system_blocks.Q, -1j * self._k0 * self._system_blocks.P.T],
-                    [_np.zeros(K_SI.shape), -1j * self._k0 * self._system_blocks.P, -1j * self._k0 * self._system_blocks.Q]
+                    [K_SI.toarray(), K_SS + 1j * self._k0 * self._system_blocks.Q, -1j * self._k0 * eta0 * self._system_blocks.P.T],
+                    [_np.zeros(K_SI.shape), -1j * self._k0 * eta0 * self._system_blocks.P, -1j * self._k0 * eta0**2 * self._system_blocks.Q]
                 ]
             blocks[0][0] = blocks[0][0].toarray()
             blocks[0][1] = blocks[0][1].toarray()
@@ -594,6 +598,9 @@ class FEBISystemFull(FEBISystem):
 
         self.sol_E = sol[:self.spaces.fe_size]
         self.sol_H = sol[self.spaces.fe_size:]
+
+        if self._formulation == 'ej':
+            self.sol_H *= _np.sqrt(_mu0 / _eps0)
 
 
     def solve_iterative(
@@ -708,6 +715,7 @@ class FEBISystemFull(FEBISystem):
                         + bi_scale * self._system_blocks.Q @ x[-bi_size:]
                     ))
         elif self._formulation == 'ej':
+            eta0 = _np.sqrt(_mu0 / _eps0)
             if right_prec:
                 def matvec_fun(x):
                     x = self.M_prec(x)
@@ -715,9 +723,9 @@ class FEBISystemFull(FEBISystem):
                         K_II @ x[:in_size] + K_IS @ x[in_size:-bi_size],
                         K_SI @ x[:in_size] + K_SS @ x[in_size:-bi_size]
                         + 1j * self._k0 * self._system_blocks.Q @ x[in_size:-bi_size]
-                        - 1j * self._k0 * self._system_blocks.P.T @ x[-bi_size:],
-                        - 1j * self._k0 * self._system_blocks.P @ x[in_size:-bi_size]
-                        - 1j * self._k0 * self._system_blocks.Q @ x[-bi_size:]
+                        - 1j * self._k0 * eta0 * self._system_blocks.P.T @ x[-bi_size:],
+                        - 1j * self._k0 * eta0 * self._system_blocks.P @ x[in_size:-bi_size]
+                        - 1j * self._k0 * eta0**2 * self._system_blocks.Q @ x[-bi_size:]
                     ))
             else:
                 def matvec_fun(x):
@@ -725,9 +733,9 @@ class FEBISystemFull(FEBISystem):
                         K_II @ x[:in_size] + K_IS @ x[in_size:-bi_size],
                         K_SI @ x[:in_size] + K_SS @ x[in_size:-bi_size]
                         + 1j * self._k0 * self._system_blocks.Q @ x[in_size:-bi_size]
-                        - 1j * self._k0 * self._system_blocks.P.T @ x[-bi_size:],
-                        - 1j * self._k0 * self._system_blocks.P @ x[in_size:-bi_size]
-                        - 1j * self._k0 * self._system_blocks.Q @ x[-bi_size:]
+                        - 1j * self._k0 * eta0 * self._system_blocks.P.T @ x[-bi_size:],
+                        - 1j * self._k0 * eta0 * self._system_blocks.P @ x[in_size:-bi_size]
+                        - 1j * self._k0 * eta0**2 * self._system_blocks.Q @ x[-bi_size:]
                     ))
 
         system_operator = _sparse_linalg.LinearOperator(
@@ -763,6 +771,9 @@ class FEBISystemFull(FEBISystem):
 
         self.sol_E = sol[:self.spaces.fe_size]
         self.sol_H = sol[self.spaces.fe_size:]
+
+        if self._formulation == 'ej':
+            self.sol_H *= _np.sqrt(_mu0 / _eps0)
 
         return info
 
@@ -952,6 +963,7 @@ class FEBISystemACA(FEBISystem):
                         + bi_scale * self._far_operator.matvec_Lop(x[-bi_size:])
                     ))
         elif self._formulation == 'ej':
+            eta0 = _np.sqrt(_mu0 / _eps0)
             if right_prec:
                 def matvec_fun(x):
                     x = self.M_prec(x)
@@ -962,15 +974,15 @@ class FEBISystemACA(FEBISystem):
                             self._system_blocks.Q @ x[in_size:-bi_size]
                             + self._far_operator.matvec_Lop(x[in_size:-bi_size])
                         )
-                        - 1j * self._k0 * (
+                        - 1j * self._k0 * eta0 * (
                             self._system_blocks.P.T @ x[-bi_size:]
                             + self._far_operator.matvec_Kop_T(x[-bi_size:])
                         ),
-                        - 1j * self._k0 * (
+                        - 1j * self._k0 * eta0 * (
                             self._system_blocks.P @ x[in_size:-bi_size]
                             + self._far_operator.matvec_Kop(x[in_size:-bi_size])
                         )
-                        - 1j * self._k0 * (
+                        - 1j * self._k0 * eta0**2 * (
                             self._system_blocks.Q @ x[-bi_size:]
                             + self._far_operator.matvec_Lop(x[fe_size:])
                         )
@@ -984,15 +996,15 @@ class FEBISystemACA(FEBISystem):
                             self._system_blocks.Q @ x[in_size:-bi_size]
                             + self._far_operator.matvec_Lop(x[in_size:-bi_size])
                         )
-                        - 1j * self._k0 * (
+                        - 1j * self._k0 * eta0 * (
                             self._system_blocks.P.T @ x[-bi_size:]
                             + self._far_operator.matvec_Kop_T(x[-bi_size:])
                         ),
-                        - 1j * self._k0 * (
+                        - 1j * self._k0 * eta0 * (
                             self._system_blocks.P @ x[in_size:-bi_size]
                             + self._far_operator.matvec_Kop(x[in_size:-bi_size])
                         )
-                        - 1j * self._k0 * (
+                        - 1j * self._k0 * eta0**2 * (
                             self._system_blocks.Q @ x[-bi_size:]
                             + self._far_operator.matvec_Lop(x[fe_size:])
                         )
@@ -1031,5 +1043,8 @@ class FEBISystemACA(FEBISystem):
 
         self.sol_E = sol[:self.spaces.fe_size]
         self.sol_H = sol[self.spaces.fe_size:]
+
+        if self._formulation == 'ej':
+            self.sol_H *= _np.sqrt(_mu0 / _eps0)
 
         return info

@@ -20,6 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import numba as _nb
 import numpy as _np
 from scipy import sparse as _sparse
+from scipy.constants import epsilon_0 as _eps0, mu_0 as _mu0
 import dolfinx as _dolfinx
 import ufl as _ufl
 from adaptoctree import tree as _tree, morton as _morton
@@ -337,7 +338,7 @@ def assemble_rhs(
                 ) * J_m
 
     if formulation == 'ej':
-        b_inc = -1j * k0 * _np.concatenate((b_M, b_inc))
+        b_inc = -1j * k0 * _np.concatenate((b_M, b_inc * _np.sqrt(_mu0 / _eps0)))
 
     return b_inc
 
