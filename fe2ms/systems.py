@@ -511,9 +511,9 @@ class FEBISystemFull(FEBISystem):
 
             if self._formulation == 'is-efie':
                 blocks = [
-                    [K_II.toarray(), K_IS.toarray(), None],
+                    [K_II, K_IS, _np.zeros(K_IS.shape)],
                     [K_SI.toarray(), K_SS.toarray(), B_matrix.toarray()],
-                    [None, P_matrix, Q_matrix]
+                    [_np.zeros(K_SI.shape), P_matrix, Q_matrix]
                 ]
             elif self._formulation == 'vs-efie':
                 blocks = [
@@ -522,11 +522,10 @@ class FEBISystemFull(FEBISystem):
                 ]
             elif self._formulation == 'ej':
                 blocks = [
-                    [K_II, K_IS, None],
-                    [K_SI, K_SS + 1j * self._k0 * Q_matrix, -1j * self._k0 * P_matrix.T],
-                    [None, -1j * self._k0 * P_matrix, -1j * self._k0 * Q_matrix]
+                    [K_II, K_IS, _np.zeros(K_IS.shape)],
+                    [K_SI.toarray(), K_SS + 1j * self._k0 * Q_matrix, -1j * self._k0 * P_matrix.T],
+                    [_np.zeros(K_SI.shape), -1j * self._k0 * P_matrix, -1j * self._k0 * Q_matrix]
                 ]
-                blocks[1][1] = blocks[1][1].toarray()
             blocks[0][0] = blocks[0][0].toarray()
             blocks[0][1] = blocks[0][1].toarray()
             self._system_lufactor = _linalg.lu_factor(_np.block(blocks))
@@ -574,9 +573,9 @@ class FEBISystemFull(FEBISystem):
 
             if self._formulation == 'is-efie':
                 blocks = [
-                    [K_II.toarray(), K_IS.toarray(), None],
+                    [K_II, K_IS, _np.zeros(K_IS.shape)],
                     [K_SI.toarray(), K_SS.toarray(), self._system_blocks.B.toarray()],
-                    [None, self._system_blocks.P, self._system_blocks.Q]
+                    [_np.zeros(K_SI.shape), self._system_blocks.P, self._system_blocks.Q]
                 ]
             elif self._formulation == 'vs-efie':
                 blocks = [
@@ -585,11 +584,10 @@ class FEBISystemFull(FEBISystem):
                 ]
             elif self._formulation == 'ej':
                 blocks = [
-                    [K_II, K_IS, None],
-                    [K_SI, K_SS + 1j * self._k0 * self._system_blocks.Q, -1j * self._k0 * self._system_blocks.P.T],
-                    [None, -1j * self._k0 * self._system_blocks.P, -1j * self._k0 * self._system_blocks.Q]
+                    [K_II, K_IS, _np.zeros(K_IS.shape)],
+                    [K_SI.toarray(), K_SS + 1j * self._k0 * self._system_blocks.Q, -1j * self._k0 * self._system_blocks.P.T],
+                    [_np.zeros(K_SI.shape), -1j * self._k0 * self._system_blocks.P, -1j * self._k0 * self._system_blocks.Q]
                 ]
-                blocks[1][1] = blocks[1][1].toarray()
             blocks[0][0] = blocks[0][0].toarray()
             blocks[0][1] = blocks[0][1].toarray()
             sol = _linalg.solve(_np.block(blocks), self._rhs)
