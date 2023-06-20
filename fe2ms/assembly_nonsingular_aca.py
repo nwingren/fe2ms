@@ -21,6 +21,9 @@ import numba as _nb
 import numpy as _np
 from adaptoctree import morton as _morton
 
+# FIXME: Array sizes for rows/cols/vals are known ahead of time so they should be initialized as
+# empty numpy arrays instead of lists. This will reduce memory use as lists will not have to be
+# converted to arrays at the end of the function
 @_nb.jit(nopython=True, fastmath=True, error_model='numpy')
 def compute_KL_operators_near_octree(
     k0, basis, divs, quad_points, quad_weights, edge2facet, facet_areas,

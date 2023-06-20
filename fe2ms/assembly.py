@@ -156,17 +156,20 @@ def assemble_bi_blocks_full(
     Kop_matrix = _np.zeros((bi_size, bi_size), dtype=_np.complex128)
     Lop_matrix = _np.zeros((bi_size, bi_size), dtype=_np.complex128)
 
-    Kop_singular, Lop_singular, singular_entries, K_prec, L_prec = _compute_singularities_KL_operators(
-        k0, meshdata, basisdata, quad_order_singular, True
-    )
+    K_rows, K_cols, K_vals, L_rows, L_cols, L_vals, singular_entries, K_prec, L_prec = \
+        _compute_singularities_KL_operators(k0, meshdata, basisdata, quad_order_singular, True)
 
     _assembly_full.assemble_KL_operators(
         k0, basisdata.basis, basisdata.divs, basisdata.quad_points, basisdata.quad_weights,
         meshdata.edge2facet, meshdata.facet_areas, singular_entries, Kop_matrix, Lop_matrix
     )
 
-    Kop_matrix += Kop_singular
-    Lop_matrix += Lop_singular
+    Kop_matrix += _sparse.coo_array(
+        (K_vals, (K_rows, K_cols)), shape=2*(meshdata.edge2vert.shape[0],)
+    ).tocsc()
+    Lop_matrix += _sparse.coo_array(
+        (L_vals, (L_rows, L_cols)), shape=2*(meshdata.edge2vert.shape[0],)
+    ).tocsc()
 
     return Kop_matrix, Lop_matrix, K_prec, L_prec
 
@@ -253,10 +256,8 @@ def assemble_bi_aca(
 
     u, x, v, w = _tree.find_interaction_lists(balanced_leaves, complete_tree, depth)
 
-    
-    Kop_singular, Lop_singular, singular_entries, K_prec, L_prec = _compute_singularities_KL_operators(
-        k0, meshdata, basisdata, quad_order_singular, True
-    )
+    K_rows, K_cols, K_vals, L_rows, L_cols, L_vals, singular_entries, K_prec, L_prec = \
+        _compute_singularities_KL_operators(k0, meshdata, basisdata, quad_order_singular, True)
 
     rows, cols, Kop_vals, Lop_vals = _assembly_aca.compute_KL_operators_near_octree(
         k0, basisdata.basis, basisdata.divs, basisdata.quad_points,
@@ -264,10 +265,22 @@ def assemble_bi_aca(
         singular_entries, complete_tree, u, edge2key_leaves
     )
 
-    Kop_near = _sparse.coo_array((Kop_vals, (rows, cols)), shape=2*(meshdata.edge2vert.shape[0],)).tocsc()
-    Kop_near += Kop_singular
-    Lop_near = _sparse.coo_array((Lop_vals, (rows, cols)), shape=2*(meshdata.edge2vert.shape[0],)).tocsc()
-    Lop_near += Lop_singular
+    Kop_near = _sparse.coo_array(
+        (
+            _np.concatenate((K_vals, Kop_vals)),
+            (_np.concatenate((K_rows, rows)), _np.concatenate((K_cols, cols)))
+        ),
+        shape=2*(meshdata.edge2vert.shape[0],)
+    ).tocsc()
+    del K_rows, K_cols, K_vals, Kop_vals
+    Lop_near = _sparse.coo_array(
+        (
+            _np.concatenate((L_vals, Lop_vals)),
+            (_np.concatenate((L_rows, rows)), _np.concatenate((L_cols, cols)))
+        ),
+        shape=2*(meshdata.edge2vert.shape[0],)
+    ).tocsc()
+    del L_rows, L_cols, L_vals, rows, cols, Lop_vals
 
     far_operator = _assembly_aca.compute_KL_operators_far_octree(
         k0, basisdata.basis, basisdata.divs, basisdata.quad_points,
@@ -376,10 +389,18 @@ def _compute_singularities_KL_operators(
 
     Returns
     -------
-    K_singular : scipy.sparse.csc_array
-        K entries containing singular terms (strong singularity).
-    L_singular : scipy.sparse.csc_array
-        L entries containing singular terms (weak singularity).
+    K_rows : ndarray
+        Rows of K entries containing singular terms (strong singularity).
+    K_cols : ndarray
+        Columns of K entries containing singular terms (strong singularity).
+    K_vals : ndarray
+        Values of K entries containing singular terms (strong singularity).
+    L_rows : scipy.sparse.csc_array
+        Rows of L entries containing singular terms (weak singularity).
+    L_cols : scipy.sparse.csc_array
+        Columns of L entries containing singular terms (weak singularity).
+    L_vals : scipy.sparse.csc_array
+        Values of L entries containing singular terms (weak singularity).
     singular_entries : set
         Set of tuples (row,col) corresponding to the computed singular terms.
     K_prec : scipy.sparse.csc_array
@@ -674,21 +695,11 @@ def _compute_singularities_KL_operators(
         basisdata.basis, basisdata.quad_weights,
         meshdata.facet2edge, meshdata.edge2facet, meshdata.facet_areas, meshdata.facet_normals
     )
-    K_self = 1/2 * _sparse.coo_array(
-        (_np.array(B_vals), (_np.array(B_rows), _np.array(B_cols))), shape=(num_edges, num_edges)
-    ).tocsc()
-
-    K_singular = _sparse.coo_array(
-        (_np.array(K_vals), (_np.array(K_rows), _np.array(K_cols))), shape=(num_edges, num_edges)
-    ).tocsc()
-    L_singular = _sparse.coo_array(
-        (_np.array(L_vals), (_np.array(L_rows), _np.array(L_cols))), shape=(num_edges, num_edges)
-    ).tocsc()
-
-    K_singular += K_self
 
     if gen_preconditioner:
-        K_prec = K_self
+        K_prec = 0.5 * _sparse.coo_array(
+            (B_vals, (B_rows, B_cols)), shape=(num_edges, num_edges)
+        ).tocsc()
         L_prec = _sparse.coo_array(
             (_np.array(Lp_vals), (_np.array(Lp_rows), _np.array(Lp_cols))), shape=(num_edges, num_edges)
         ).tocsc()
@@ -696,4 +707,11 @@ def _compute_singularities_KL_operators(
         K_prec = None
         L_prec = None
 
-    return K_singular, L_singular, singular_entries, K_prec, L_prec
+    K_rows = _np.concatenate((K_rows, B_rows))
+    del B_rows
+    K_cols = _np.concatenate((K_cols, B_cols))
+    del B_cols
+    K_vals = _np.concatenate((K_vals, 0.5 * B_vals))
+    del B_vals
+
+    return K_rows, K_cols, K_vals, L_rows, L_cols, L_vals, singular_entries, K_prec, L_prec
