@@ -141,7 +141,7 @@ def iterative_ilu(
 
 def iterative_petsc(
     system: _FEBISystem, scale=None,
-    solver=_PETSc.KSP.Type.LGMRES, solver_tol=1e-7, # pylint: disable=no-member
+    solver=_PETSc.KSP.Type.LGMRES, solver_tol=1e-7, max_iters=10000, # pylint: disable=no-member
     inner_prec=_PETSc.PC.Type.SOR, inner_prec_side=_PETSc.PC.Side.RIGHT, # pylint: disable=no-member
     petsc_options={}
 ):
@@ -170,6 +170,8 @@ def iterative_petsc(
         found in petsc4py.PETSc.KSP.Type.
     solver_tol : float, optional
         (Relative) tolerance of iterative solver, by default 1e-7.
+    max_iters : int, optional
+        Maximum number of iterations for inner solver, by default 10000.
     inner_prec : str, optional
         Preconditioner to use in the PETSc solver, by default SOR. Possilbe preconditioner
         identifiers are found in petsc4py.PETSc.PC.Type.
@@ -221,7 +223,10 @@ def iterative_petsc(
     ksp.setPC(pc)
     ksp.setPCSide(inner_prec_side)
     ksp.setOperators(sparse_mat)
-    ksp.setTolerances(atol=0, rtol=solver_tol)
+    if max_iters is not None:
+        ksp.setTolerances(atol=0, rtol=solver_tol, max_it=max_iters)
+    else:
+        ksp.setTolerances(atol=0, rtol=solver_tol)
     if len(petsc_options) > 0:
         ksp.setOptionsPrefix(options_prefix)
         ksp.setFromOptions()
