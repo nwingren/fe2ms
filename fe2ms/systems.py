@@ -253,6 +253,79 @@ class FEBISystem:
             )
 
 
+    # TODO: Test this!
+    def set_source_dipole(self, dipole_moment, polarization, origin):
+        """
+        Set source function corresponding to a Hertzian dipole.
+
+        Parameters
+        ----------
+        dipole_moment : complex
+            Dipole moment (current * length) of the dipole.
+        polarization : ndarray
+            Vector of shape (3,) for polarization of the dipole in cartesian coordinates.
+            Will be normalized if it is not already unit vector.
+        origin : ndarray
+            Vector of shape (3,) for origin of the dipole in cartesian coordinates.
+        """
+
+        polarization /= _linalg.norm(polarization)
+        phi_p = _np.arctan2(polarization[1], polarization[0])
+        theta_p = _np.arccos(polarization[2])
+        eta0 = _np.sqrt(_mu0 / _eps0)
+        
+        def Ed(x):
+            x -= origin
+            r = _np.sqrt(x[:,0]**2 + x[:,1]**2 + x[:,2]**2)
+            phi = _np.arctan2(x[:,1], x[:,0]) - phi_p
+            theta = _np.arccos(x[:,2]/r) - theta_p
+            r_hat = _np.array([
+                _np.sin(theta) * _np.cos(phi),
+                _np.sin(theta) * _np.sin(phi),
+                _np.cos(theta)
+            ])
+            theta_hat = _np.array([
+                _np.cos(theta) * _np.cos(phi),
+                _np.cos(theta) * _np.sin(phi),
+                -_np.sin(theta)
+            ])
+            return (
+                r_hat * eta0 * dipole_moment * _np.cos(theta) / (2 * _np.pi * r**2)
+                * (1 + 1 / (1j * self._k0 * r)) * _np.exp(-1j * self._k0 * r)
+                + theta_hat * 1j * self._k0 * eta0 * dipole_moment * _np.sin(theta) / (4 * _np.pi * r)
+                * (1 + 1 / (1j * self._k0 * r) - 1 / (self._k0 * r)**2) * _np.exp(-1j * self._k0 * r)
+            ).T
+        
+        def Hd_bar(x):
+            x -= origin
+            r = _np.sqrt(x[:,0]**2 + x[:,1]**2 + x[:,2]**2)
+            phi = _np.arctan2(x[:,1], x[:,0]) - phi_p
+            theta = _np.arccos(x[:,2]/r) - theta_p
+            phi_hat = _np.array([
+                -_np.sin(phi),
+                _np.cos(phi),
+                _np.zeros_like(phi)
+            ])
+            return (
+                phi_hat * 1j * self._k0 * dipole_moment * _np.sin(theta) / (4 * _np.pi * r)
+                * (1 + 1 / (1j * self._k0 * r)) * _np.exp(-1j * self._k0 * r) * eta0
+            ).T
+        
+        self._source_fun = (Ed, Hd_bar)
+
+        b_inc = _assembly.assemble_rhs(
+            self._formulation, self._k0, self.spaces.bi_meshdata,
+            self.spaces.bi_basisdata, self._source_fun
+        )
+
+        if self._formulation in ('is-efie', 'vs-efie'):
+            self._rhs = _np.concatenate((_np.zeros(self.spaces.fe_size), b_inc))
+        elif self._formulation == 'ej':
+            self._rhs = _np.concatenate(
+                (_np.zeros(self.spaces.fe_size - self.spaces.bi_size), b_inc)
+            )
+
+
     # TODO: Add cartesian coordinate version of this (and of rcs)
     def compute_far_field(
         self, r, theta, phi, total_field=False
