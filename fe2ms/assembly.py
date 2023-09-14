@@ -166,10 +166,10 @@ def assemble_bi_blocks_full(
 
     Kop_matrix += _sparse.coo_array(
         (K_vals, (K_rows, K_cols)), shape=2*(meshdata.edge2vert.shape[0],)
-    ).tocsc()
+    ).tocsr()
     Lop_matrix += _sparse.coo_array(
         (L_vals, (L_rows, L_cols)), shape=2*(meshdata.edge2vert.shape[0],)
-    ).tocsc()
+    ).tocsr()
 
     return Kop_matrix, Lop_matrix, K_prec, L_prec
 
@@ -271,7 +271,7 @@ def assemble_bi_aca(
             (_np.concatenate((K_rows, rows)), _np.concatenate((K_cols, cols)))
         ),
         shape=2*(meshdata.edge2vert.shape[0],)
-    ).tocsc()
+    ).tocsr()
     del K_rows, K_cols, K_vals, Kop_vals
     Lop_near = _sparse.coo_array(
         (
@@ -279,7 +279,7 @@ def assemble_bi_aca(
             (_np.concatenate((L_rows, rows)), _np.concatenate((L_cols, cols)))
         ),
         shape=2*(meshdata.edge2vert.shape[0],)
-    ).tocsc()
+    ).tocsr()
     del L_rows, L_cols, L_vals, rows, cols, Lop_vals
 
     far_operator = _assembly_aca.compute_KL_operators_far_octree(
