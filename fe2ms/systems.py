@@ -72,6 +72,8 @@ class FEBISystem:
             operators to interior and surface, and uses the EFIE on the boundary.
             'ej' uses the symmetric formulation with both the EFIE and the MFIE. It requires use of
             I-S edge enumeration.
+            'teth' is a CFIE formulation which uses I-S edge enumeration. It reduces, but does not
+            eliminate, the influence of interior resonances.
         """
 
         self.spaces = None
@@ -84,7 +86,7 @@ class FEBISystem:
         self._k0 = 2 * _np.pi * frequency / _c0
 
         self.computation_volume = computation_volume
-        if formulation not in ('is-efie', 'vs-efie', 'ej'):
+        if formulation not in ('is-efie', 'vs-efie', 'ej', 'teth'):
             raise NotImplementedError(f'Formulation \'{formulation}\' not implemented')
         self._formulation = formulation
         self._source_fun = None
@@ -245,7 +247,7 @@ class FEBISystem:
             self.spaces.bi_basisdata, self._source_fun
         )
 
-        if self._formulation in ('is-efie', 'vs-efie'):
+        if self._formulation in ('is-efie', 'vs-efie', 'teth'):
             self._rhs = _np.concatenate((_np.zeros(self.spaces.fe_size), b_inc))
         elif self._formulation == 'ej':
             self._rhs = _np.concatenate(
@@ -318,7 +320,7 @@ class FEBISystem:
             self.spaces.bi_basisdata, self._source_fun
         )
 
-        if self._formulation in ('is-efie', 'vs-efie'):
+        if self._formulation in ('is-efie', 'vs-efie', 'teth'):
             self._rhs = _np.concatenate((_np.zeros(self.spaces.fe_size), b_inc))
         elif self._formulation == 'ej':
             self._rhs = _np.concatenate(
@@ -578,7 +580,7 @@ class FEBISystemFull(FEBISystem):
         # Compute LU factor if needed, otherwise store blocks
         if compute_lu:
             self._system_blocks = None
-            if self._formulation in ('is-efie', 'ej'):
+            if self._formulation != 'vs-efie':
                 K_II = self.spaces.T_IV @ K_matrix @ self.spaces.T_VI
                 K_IS = self.spaces.T_IV @ K_matrix @ self.spaces.T_VS
                 K_SI = (self.spaces.T_SV @ K_matrix) @ self.spaces.T_VI
@@ -601,6 +603,12 @@ class FEBISystemFull(FEBISystem):
                     [K_II, K_IS, _np.zeros(K_IS.shape)],
                     [K_SI.toarray(), K_SS + 1j * self._k0 * Q_matrix, -1j * self._k0 * eta0 * P_matrix.T],
                     [_np.zeros(K_SI.shape), -1j * self._k0 * eta0 * P_matrix, -1j * self._k0 * eta0**2 * Q_matrix]
+                ]
+            elif self._formulation == 'teth':
+                blocks = [
+                    [K_II, K_IS, _np.zeros(K_IS.shape)],
+                    [K_SI.toarray(), K_SS.toarray(), B_matrix.toarray()],
+                    [_np.zeros(K_SI.shape), 0.5 * (P_matrix - Q_matrix), 0.5 * (P_matrix + Q_matrix)]
                 ]
             blocks[0][0] = blocks[0][0].toarray()
             blocks[0][1] = blocks[0][1].toarray()
@@ -641,7 +649,7 @@ class FEBISystemFull(FEBISystem):
         if self._system_blocks is None:
             sol = _linalg.lu_solve(self._system_lufactor, self._rhs)
         else:
-            if self._formulation in ('is-efie', 'ej'):
+            if self._formulation != 'vs-efie':
                 K_II = self.spaces.T_IV @ self._system_blocks.K @ self.spaces.T_VI
                 K_IS = self.spaces.T_IV @ self._system_blocks.K @ self.spaces.T_VS
                 K_SI = (self.spaces.T_SV @ self._system_blocks.K) @ self.spaces.T_VI
@@ -662,8 +670,26 @@ class FEBISystemFull(FEBISystem):
                 eta0 = _np.sqrt(_mu0 / _eps0)
                 blocks = [
                     [K_II, K_IS, _np.zeros(K_IS.shape)],
-                    [K_SI.toarray(), K_SS + 1j * self._k0 * self._system_blocks.Q, -1j * self._k0 * eta0 * self._system_blocks.P.T],
-                    [_np.zeros(K_SI.shape), -1j * self._k0 * eta0 * self._system_blocks.P, -1j * self._k0 * eta0**2 * self._system_blocks.Q]
+                    [
+                        K_SI.toarray(),
+                        K_SS + 1j * self._k0 * self._system_blocks.Q,
+                        -1j * self._k0 * eta0 * self._system_blocks.P.T
+                    ],
+                    [
+                        _np.zeros(K_SI.shape),
+                        -1j * self._k0 * eta0 * self._system_blocks.P,
+                        -1j * self._k0 * eta0**2 * self._system_blocks.Q
+                    ]
+                ]
+            elif self._formulation == 'teth':
+                blocks = [
+                    [K_II, K_IS, _np.zeros(K_IS.shape)],
+                    [K_SI.toarray(), K_SS.toarray(), self._system_blocks.B.toarray()],
+                    [
+                        _np.zeros(K_SI.shape),
+                        0.5 * (self._system_blocks.P - self._system_blocks.Q),
+                        0.5 * (self._system_blocks.P + self._system_blocks.Q)
+                    ]
                 ]
             blocks[0][0] = blocks[0][0].toarray()
             blocks[0][1] = blocks[0][1].toarray()
@@ -739,7 +765,7 @@ class FEBISystemFull(FEBISystem):
             bi_scale = 1.
 
         # LinearOperator for matrix-vector multiplication such that sparse blocks are kept that way
-        if self._formulation in ('is-efie', 'ej'):
+        if self._formulation != 'vs-efie':
             K_II = self.spaces.T_IV @ self._system_blocks.K @ self.spaces.T_VI
             K_IS = self.spaces.T_IV @ self._system_blocks.K @ self.spaces.T_VS
             K_SI = (self.spaces.T_SV @ self._system_blocks.K) @ self.spaces.T_VI
@@ -809,6 +835,38 @@ class FEBISystemFull(FEBISystem):
                         - 1j * self._k0 * eta0 * self._system_blocks.P.T @ x[-bi_size:],
                         - 1j * self._k0 * eta0 * self._system_blocks.P @ x[in_size:-bi_size]
                         - 1j * self._k0 * eta0**2 * self._system_blocks.Q @ x[-bi_size:]
+                    ))
+        elif self._formulation == 'teth':
+            if right_prec:
+                def matvec_fun(x):
+                    x = self.M_prec(x)
+                    return _np.concatenate((
+                        K_II @ x[:in_size] + K_IS @ x[in_size:-bi_size],
+                        K_SI @ x[:in_size] + K_SS @ x[in_size:-bi_size]
+                        + self._system_blocks.B @ x[-bi_size:],
+                        bi_scale * 0.5 * (
+                            self._system_blocks.P @ x[in_size:-bi_size]
+                            - self._system_blocks.Q @ x[in_size:-bi_size]
+                        )
+                        + bi_scale * 0.5 * (
+                            self._system_blocks.P @ x[-bi_size:]
+                            + self._system_blocks.Q @ x[-bi_size:]
+                        )
+                    ))
+            else:
+                def matvec_fun(x):
+                    return _np.concatenate((
+                        K_II @ x[:in_size] + K_IS @ x[in_size:-bi_size],
+                        K_SI @ x[:in_size] + K_SS @ x[in_size:-bi_size]
+                        + self._system_blocks.B @ x[-bi_size:],
+                        bi_scale * 0.5 * (
+                            self._system_blocks.P @ x[in_size:-bi_size]
+                            - self._system_blocks.Q @ x[in_size:-bi_size]
+                        ) 
+                        + bi_scale * 0.5 * (
+                            self._system_blocks.P @ x[-bi_size:]
+                            + self._system_blocks.Q @ x[-bi_size:]
+                        )
                     ))
 
         system_operator = _sparse_linalg.LinearOperator(
@@ -979,7 +1037,7 @@ class FEBISystemACA(FEBISystem):
             bi_scale = 1.
 
         # LinearOperator for matrix-vector multiplication such that sparse blocks are kept that way
-        if self._formulation in ('is-efie', 'ej'):
+        if self._formulation != 'vs-efie':
             K_II = self.spaces.T_IV @ self._system_blocks.K @ self.spaces.T_VI
             K_IS = self.spaces.T_IV @ self._system_blocks.K @ self.spaces.T_VS
             K_SI = (self.spaces.T_SV @ self._system_blocks.K) @ self.spaces.T_VI
@@ -1082,6 +1140,54 @@ class FEBISystemACA(FEBISystem):
                             + self._far_operator.matvec_Lop(x[fe_size:])
                         )
                     ))
+        elif self._formulation == 'teth':
+            if right_prec:
+                def matvec_fun(x):
+                    x = self.M_prec(x)
+                    return _np.concatenate((
+                        K_II @ x[:in_size] + K_IS @ x[in_size:-bi_size],
+                        K_SI @ x[:in_size] + K_SS @ x[in_size:-bi_size]
+                        + self._system_blocks.B @ x[-bi_size:],
+                        bi_scale * 0.5 * (
+                            self._system_blocks.P @ x[in_size:-bi_size]
+                            - self._system_blocks.Q @ x[in_size:-bi_size]
+                        )
+                        + bi_scale * 0.5 * (
+                            self._far_operator.matvec_Kop(x[in_size:-bi_size])
+                            - self._far_operator.matvec_Lop(x[in_size:-bi_size])
+                        )
+                        + bi_scale * 0.5 * (
+                            self._system_blocks.P @ x[-bi_size:]
+                            + self._system_blocks.Q @ x[-bi_size:]
+                        )
+                        + bi_scale * 0.5 * (
+                            self._far_operator.matvec_Kop(x[-bi_size:])
+                            + self._far_operator.matvec_Lop(x[-bi_size:])
+                        )
+                    ))
+            else:
+                def matvec_fun(x):
+                    return _np.concatenate((
+                        K_II @ x[:in_size] + K_IS @ x[in_size:-bi_size],
+                        K_SI @ x[:in_size] + K_SS @ x[in_size:-bi_size]
+                        + self._system_blocks.B @ x[-bi_size:],
+                        bi_scale * 0.5 * (
+                            self._system_blocks.P @ x[in_size:-bi_size]
+                            - self._system_blocks.Q @ x[in_size:-bi_size]
+                        )
+                        + bi_scale * 0.5 * (
+                            self._far_operator.matvec_Kop(x[in_size:-bi_size])
+                            - self._far_operator.matvec_Lop(x[in_size:-bi_size])
+                        )
+                        + bi_scale * 0.5 * (
+                            self._system_blocks.P @ x[-bi_size:]
+                            + self._system_blocks.Q @ x[-bi_size:]
+                        )
+                        + bi_scale * 0.5 * (
+                            self._far_operator.matvec_Kop(x[-bi_size:])
+                            + self._far_operator.matvec_Lop(x[-bi_size:])
+                        )
+                    ))
 
         system_operator = _sparse_linalg.LinearOperator(
             shape = 2 * (self.spaces.fe_size + self.spaces.bi_size,),
@@ -1121,3 +1227,119 @@ class FEBISystemACA(FEBISystem):
             self.sol_H *= _np.sqrt(_mu0 / _eps0)
 
         return info
+    
+
+    def solve_semidirect(
+        self, solver=None, counter=None, solver_tol=1e-5, lu_solve=None
+    ):
+        """
+        Solve system by first eliminating the FE part using a sparse LU factorization, and then
+        using this with the BI part in an iterative solver.
+
+        No preconditioning options at this time. Not available for 'ej' formulation.
+
+        This method is suitable for problems with large FE part and small BI part, or  particularly
+        ill-conditioned problems with small enough BI part.
+        Will assemble if not already done.
+
+        Parameters
+        ----------
+        solver : function, optional
+            Iterative solver to use, by default scipy.sparse.linalg.lgmres. This should have the
+            same call structure as other iterative solvers in scipy.sparse.linalg.
+        counter : function, optional
+            Callback function to scipy iterative solver, by default None. Note that different
+            solvers call this differently. For more info, see scipy documentation.
+        solver_tol : float, optional
+            (Relative) tolerance of iterative solver, by default 1e-5.
+        lu_solve : function, optional
+            Function corresponding to 'solve' operation for the LU factorization of the FE part.
+            This is used instead of computing new factorizations using the system matrix.
+
+        Returns
+        -------
+        info : int
+            0 if solver converged, >0 if solver did not converge,
+            >0 if illegal input or breakdown of solver.
+        lu_solve : function
+            Function corresponding to 'solve' operation for the LU factorization of the FE part
+            which was used in the solution
+        """
+
+        if self._rhs is None:
+            raise Exception('No right-hand-side set!')
+
+        if self._system_blocks is None:
+            LOGGER.info('System not assembled, doing that before solving')
+            self.assemble()
+        
+        if solver is None:
+            solver = _sparse_linalg.lgmres
+
+        if self._formulation == 'ej':
+            raise Exception('Semidirect solution not available for ej formulation')
+        
+        fe_size = self.spaces.fe_size
+        bi_size = self.spaces.bi_size
+        in_size = fe_size - bi_size
+        
+        if lu_solve is None:
+            if self._formulation != 'vs-efie':
+                K_II = self.spaces.T_IV @ self._system_blocks.K @ self.spaces.T_VI
+                K_IS = self.spaces.T_IV @ self._system_blocks.K @ self.spaces.T_VS
+                K_SI = (self.spaces.T_SV @ self._system_blocks.K) @ self.spaces.T_VI
+                K_SS = self.spaces.T_SV @ self._system_blocks.K @ self.spaces.T_VS
+                K = _sparse.bmat(
+                    [
+                        [K_II, K_IS],
+                        [K_SI, K_SS]
+                    ],
+                    'csc'
+                )            
+
+            # Eliminate interior DoFs
+            _sparse.linalg.use_solver(useUmfpack=True)
+            K_LU = _sparse.linalg.factorized(K)
+        
+        else:
+            K_LU = lu_solve
+        
+        if self._formulation == 'teth':
+            def matvec_fun(x):
+                KBx = K_LU(_np.concatenate((_np.zeros(in_size), self._system_blocks.B @ x)))
+                return (
+                    0.5 * (self._system_blocks.P @ x + self._system_blocks.Q @ x)
+                    + 0.5 * (self._far_operator.matvec_Kop(x) + self._far_operator.matvec_Lop(x))
+                    - 0.5 * (
+                        self._system_blocks.P @ KBx[in_size:]
+                        - self._system_blocks.Q @ KBx[in_size:]
+                    )
+                    - 0.5 * (
+                        self._far_operator.matvec_Kop(KBx[in_size:])
+                        - self._far_operator.matvec_Lop(KBx[in_size:])
+                    )
+                )
+        else:
+            def matvec_fun(x):
+                KBx = K_LU(_np.concatenate((_np.zeros(in_size), self._system_blocks.B @ x)))
+                return (
+                    self._system_blocks.Q @ x + self._far_operator.matvec_Lop(x)
+                    - self._system_blocks.P @ KBx[in_size:]
+                    - self._far_operator.matvec_Kop(KBx[in_size:])
+                )
+
+        system_operator = _sparse.linalg.LinearOperator(
+            shape = 2 * (bi_size,),
+            matvec = matvec_fun,
+            dtype = _np.complex128
+        )
+
+        if counter is None:
+            sol, info = solver(system_operator, self._rhs[fe_size:], tol=solver_tol)
+        else:
+            sol, info = solver(system_operator, self._rhs[fe_size:], callback=counter, tol=solver_tol)
+
+        self.sol_E = -K_LU(_np.concatenate((_np.zeros(in_size), self._system_blocks.B @ sol)))
+        self.sol_H = sol
+
+        return info, lu_solve

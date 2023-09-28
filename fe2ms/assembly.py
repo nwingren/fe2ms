@@ -300,7 +300,7 @@ def assemble_rhs(
 
     Parameters
     ----------
-    formulation : {'is-efie', 'vs-efie', 'ej'}
+    formulation : {'is-efie', 'vs-efie', 'ej', 'teth'}
         Formulation used.
     k0 : float
         Free-space wavenumber of problem.
@@ -318,7 +318,7 @@ def assemble_rhs(
         Right-hand-side (BI part).
     """
 
-    if formulation not in ('is-efie', 'vs-efie', 'ej'):
+    if formulation not in ('is-efie', 'vs-efie', 'ej', 'teth'):
         raise NotImplementedError(f'Formulation \'{formulation}\' not implemented')
 
     bi_size = meshdata.edge2vert.shape[0]
@@ -349,9 +349,16 @@ def assemble_rhs(
                     basisdata.basis[edge_m, i_facet_m] * basisdata.quad_weights[:,None]
                     * source_fun[1](basisdata.quad_points[facet_m])
                 ) * J_m
+            elif formulation == 'teth':
+                b_inc[edge_m] += _np.sum(
+                    basisdata.basis[edge_m, i_facet_m] * basisdata.quad_weights[:,None]
+                    * source_fun[1](basisdata.quad_points[facet_m])
+                ) * J_m
 
     if formulation == 'ej':
         b_inc = -1j * k0 * _np.concatenate((b_M, b_inc * _np.sqrt(_mu0 / _eps0)))
+    elif formulation == 'teth':
+        b_inc *= 0.5
 
     return b_inc
 

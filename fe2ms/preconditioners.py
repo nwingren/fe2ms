@@ -253,7 +253,7 @@ def _make_sparse_mat(formulation, k0, system_blocks, spaces, K_prec, L_prec, sca
         else:
             scale = -2j * k0
 
-    if formulation in ('is-efie', 'ej'):
+    if formulation != 'vs-efie':
         K_II = spaces.T_IV @ system_blocks.K @ spaces.T_VI
         K_IS = spaces.T_IV @ system_blocks.K @ spaces.T_VS
         K_SI = (spaces.T_SV @ system_blocks.K) @ spaces.T_VI
@@ -283,6 +283,15 @@ def _make_sparse_mat(formulation, k0, system_blocks, spaces, K_prec, L_prec, sca
                 [K_II, K_IS, None],
                 [K_SI, K_SS + 1j * k0 * scale * L_prec, -1j * k0 * eta0 * scale * K_prec.T],
                 [None, -1j * k0 * eta0 * scale * K_prec, -1j * k0 * eta0**2 * scale * L_prec]
+            ],
+            'csc'
+        )
+    elif formulation == 'teth':
+        sparse_mat = _sparse.bmat(
+            [
+                [K_II, K_IS, None],
+                [K_SI, K_SS, system_blocks.B],
+                [None, scale * 0.5 * (K_prec - L_prec), scale * 0.5 * (K_prec + L_prec)]
             ],
             'csc'
         )
