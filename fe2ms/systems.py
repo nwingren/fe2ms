@@ -907,6 +907,113 @@ class FEBISystemFull(FEBISystem):
             self.sol_H *= _np.sqrt(_mu0 / _eps0)
 
         return info
+    
+
+    def solve_semidirect(
+        self, solver=None, counter=None, solver_tol=1e-5, lu_solve=None
+    ):
+        """
+        Solve system by first eliminating the FE part using a sparse LU factorization, and then
+        using this with the BI part in an iterative solver.
+
+        No preconditioning options at this time. Not available for 'ej' formulation.
+
+        This method is suitable for problems with large FE part and small BI part, or  particularly
+        ill-conditioned problems with small enough BI part.
+        Will assemble if not already done.
+
+        Parameters
+        ----------
+        solver : function, optional
+            Iterative solver to use, by default scipy.sparse.linalg.lgmres. This should have the
+            same call structure as other iterative solvers in scipy.sparse.linalg.
+        counter : function, optional
+            Callback function to scipy iterative solver, by default None. Note that different
+            solvers call this differently. For more info, see scipy documentation.
+        solver_tol : float, optional
+            (Relative) tolerance of iterative solver, by default 1e-5.
+        lu_solve : function, optional
+            Function corresponding to 'solve' operation for the LU factorization of the FE part.
+            This is used instead of computing new factorizations using the system matrix.
+
+        Returns
+        -------
+        info : int
+            0 if solver converged, >0 if solver did not converge,
+            >0 if illegal input or breakdown of solver.
+        lu_solve : function
+            Function corresponding to 'solve' operation for the LU factorization of the FE part
+            which was used in the solution
+        """
+
+        if self._rhs is None:
+            raise Exception('No right-hand-side set!')
+
+        if self._system_blocks is None:
+            LOGGER.info('System not assembled, doing that before solving')
+            self.assemble()
+        
+        if solver is None:
+            solver = _sparse_linalg.lgmres
+
+        if self._formulation == 'ej':
+            raise Exception('Semidirect solution not available for ej formulation')
+        
+        fe_size = self.spaces.fe_size
+        bi_size = self.spaces.bi_size
+        in_size = fe_size - bi_size
+        
+        if lu_solve is None:
+            if self._formulation != 'vs-efie':
+                K_II = self.spaces.T_IV @ self._system_blocks.K @ self.spaces.T_VI
+                K_IS = self.spaces.T_IV @ self._system_blocks.K @ self.spaces.T_VS
+                K_SI = (self.spaces.T_SV @ self._system_blocks.K) @ self.spaces.T_VI
+                K_SS = self.spaces.T_SV @ self._system_blocks.K @ self.spaces.T_VS
+                K = _sparse.bmat(
+                    [
+                        [K_II, K_IS],
+                        [K_SI, K_SS]
+                    ],
+                    'csc'
+                )            
+
+            # Eliminate interior DoFs
+            _sparse.linalg.use_solver(useUmfpack=True)
+            K_LU = _sparse.linalg.factorized(K)
+        
+        else:
+            K_LU = lu_solve
+        
+        if self._formulation == 'teth':
+            def matvec_fun(x):
+                KBx = K_LU(_np.concatenate((_np.zeros(in_size), self._system_blocks.B @ x)))
+                return (
+                    0.5 * (self._system_blocks.P @ x + self._system_blocks.Q @ x)
+                    - 0.5 * (
+                        self._system_blocks.P @ KBx[in_size:]
+                        - self._system_blocks.Q @ KBx[in_size:]
+                    )
+                )
+        else:
+            def matvec_fun(x):
+                KBx = K_LU(_np.concatenate((_np.zeros(in_size), self._system_blocks.B @ x)))
+                return self._system_blocks.Q @ x - self._system_blocks.P @ KBx[in_size:]
+
+        system_operator = _sparse.linalg.LinearOperator(
+            shape = 2 * (bi_size,),
+            matvec = matvec_fun,
+            dtype = _np.complex128
+        )
+
+        if counter is None:
+            sol, info = solver(system_operator, self._rhs[fe_size:], tol=solver_tol)
+        else:
+            sol, info = solver(system_operator, self._rhs[fe_size:], callback=counter, tol=solver_tol)
+
+        self.sol_E = -K_LU(_np.concatenate((_np.zeros(in_size), self._system_blocks.B @ sol)))
+        self.sol_H = sol
+
+        return info, lu_solve
 
 
 class FEBISystemACA(FEBISystem):
