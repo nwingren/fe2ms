@@ -91,6 +91,7 @@ class ComputationVolume():
 
         # Load mesh
         _gmsh.initialize()
+        _gmsh.option.setNumber('General.Verbosity', 2)
         _gmsh.open(mesh_file)
         self.mesh, self.cell_tags, self.facet_tags = _gmshio.model_to_mesh(
             _gmsh.model, _MPI.COMM_SELF, 0

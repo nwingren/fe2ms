@@ -1134,6 +1134,7 @@ class FEBISystemACA(FEBISystem):
             solver = _sparse_linalg.lgmres
 
         # Generate or load preconditioner
+        # FIXME: Change how preconditioners are used. They should probably not be loaded like this
         if preconditioner is None:
             if self.M_prec is None or new_prec:
                 self.M_prec = _precs.direct(self)
