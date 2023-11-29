@@ -36,8 +36,8 @@ from fe2ms.bindings import demcem_bindings as _demcem_bindings
 
 
 def assemble_KB_blocks(
-    k0, computation_volume: _ComputationVolume,
-    function_spaces: _FEBISpaces
+    k0: float, computation_volume: _ComputationVolume,
+    function_spaces: _FEBISpaces, use_single_precision: bool
 ):
     """
     Assemble K and B blocks corresponding to finite element equation.
@@ -50,6 +50,8 @@ def assemble_KB_blocks(
         FEBI computation volume defining mesh, material and boundaries.
     function_spaces : utility.FEBISpaces
         Function spaces and related structures for the problem.
+    use_single_precision : bool
+        Whether to use single instead of double precision in blocks.
 
     Returns
     -------
@@ -58,6 +60,11 @@ def assemble_KB_blocks(
     B_matrix : scipy.sparse.csr_array
         Coupling matrix B (defined for BI DoFs).
     """
+
+    if use_single_precision:
+        dtype = _np.complex64
+    else:
+        dtype = _np.complex128
 
     # Define PEC boundary condition
     pec_facets = computation_volume.get_pec_facets()
@@ -109,7 +116,10 @@ def assemble_KB_blocks(
     K_matrix = _dolfinx.fem.assemble_matrix(form, bcs=boundary_conditions)
 
     K_matrix.finalize() # pylint: disable=no-member
-    K_matrix = _sparse.csr_array((K_matrix.data, K_matrix.indices, K_matrix.indptr)) # pylint: disable=no-member
+    K_matrix = _sparse.csr_array(
+        (K_matrix.data, K_matrix.indices, K_matrix.indptr),  # pylint: disable=no-member
+        dtype=dtype
+    )
 
     rows, cols, B_vals = _assembly_full.assemble_B_integral(
         function_spaces.bi_basisdata.basis, function_spaces.bi_basisdata.quad_weights,
@@ -122,8 +132,8 @@ def assemble_KB_blocks(
 
 
 def assemble_bi_blocks_full(
-    k0, meshdata: _bi_space.BIMeshData, basisdata: _bi_space.BIBasisData,
-    quad_order_singular
+    k0: float, meshdata: _bi_space.BIMeshData, basisdata: _bi_space.BIBasisData,
+    quad_order_singular: int, use_single_precision: bool
 ):
     """
     Assemble full BI blocks for tested K- and L-operators. This uses edge-wise assembly as opposed
@@ -139,6 +149,8 @@ def assemble_bi_blocks_full(
         Basis data for the BI problem.
     quad_order_singular : int
         Quadrature order to use in DEMCEM singular integral computations.
+    use_single_precision : bool
+        Whether to use single instead of double precision in blocks.
 
     Returns
     -------
@@ -152,9 +164,14 @@ def assemble_bi_blocks_full(
         Matrix with preconditioner entries.
     """
 
+    if use_single_precision:
+        dtype = _np.complex64
+    else:
+        dtype = _np.complex128
+
     bi_size = meshdata.edge2vert.shape[0]
-    Kop_matrix = _np.zeros((bi_size, bi_size), dtype=_np.complex128)
-    Lop_matrix = _np.zeros((bi_size, bi_size), dtype=_np.complex128)
+    Kop_matrix = _np.zeros((bi_size, bi_size), dtype=dtype)
+    Lop_matrix = _np.zeros((bi_size, bi_size), dtype=dtype)
 
     K_rows, K_cols, K_vals, L_rows, L_cols, L_vals, singular_entries, K_prec, L_prec = \
         _compute_singularities_KL_operators(k0, meshdata, basisdata, quad_order_singular, True)
@@ -165,10 +182,10 @@ def assemble_bi_blocks_full(
     )
 
     Kop_matrix += _sparse.coo_array(
-        (K_vals, (K_rows, K_cols)), shape=2*(meshdata.edge2vert.shape[0],)
+        (K_vals, (K_rows, K_cols)), shape=2*(meshdata.edge2vert.shape[0],), dtype=dtype
     ).tocsr()
     Lop_matrix += _sparse.coo_array(
-        (L_vals, (L_rows, L_cols)), shape=2*(meshdata.edge2vert.shape[0],)
+        (L_vals, (L_rows, L_cols)), shape=2*(meshdata.edge2vert.shape[0],), dtype=dtype
     ).tocsr()
 
     return Kop_matrix, Lop_matrix, K_prec, L_prec

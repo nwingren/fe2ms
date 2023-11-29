@@ -30,10 +30,15 @@ class BIMeshData:
     Class containing BI mesh and required additional data.
     """
 
-    def __init__(self, bi_mesh, fe_space, bi_to_fe_facets, ext_facets):
+    def __init__(self, bi_mesh, fe_space, bi_to_fe_facets, ext_facets, single_precision):
+
+        if single_precision:
+            dtype = _np.float32
+        else:
+            dtype = _np.float64
 
         self.mesh = bi_mesh
-        self.vert_coords = bi_mesh.geometry.x
+        self.vert_coords = bi_mesh.geometry.x.astype(dtype)
 
         bi_mesh.topology.create_connectivity(1, 2)
         self.edge2facet = bi_mesh.topology.connectivity(1, 2).array.reshape((-1,2))
@@ -65,16 +70,18 @@ class BIBasisData:
 
     def __init__(self, meshdata, quad_order=2):
 
+        dtype = meshdata.vert_coords.dtype
+
         ref_quad_points, quad_weights = _basix.make_quadrature(_basix.CellType.triangle, quad_order)
         element = _basix.create_element(
             _basix.ElementFamily.RT, _basix.CellType.triangle, 1
         )
-        basis_uv = element.tabulate(0, ref_quad_points)[0]
+        basis_uv = element.tabulate(0, ref_quad_points)[0].astype(dtype)
 
         self.basis = _np.zeros(
-            (*meshdata.edge2facet.shape, *quad_weights.shape, 3), dtype=_np.float64
+            (*meshdata.edge2facet.shape, *quad_weights.shape, 3), dtype=dtype
         )
-        self.divs = _np.zeros(meshdata.edge2facet.shape, dtype=_np.float64)
+        self.divs = _np.zeros(meshdata.edge2facet.shape, dtype=dtype)
         _compute_basis_phys(
             basis_uv, meshdata.facet2edge, meshdata.facet2vert, meshdata.edge2facet,
             meshdata.vert_coords, meshdata.facet_areas, meshdata.edge_facet_signs,
@@ -82,13 +89,14 @@ class BIBasisData:
         )
 
         self.quad_points = _np.zeros(
-            (*meshdata.facet_areas.shape, *quad_weights.shape, 3), dtype=_np.float64
+            (*meshdata.facet_areas.shape, *quad_weights.shape, 3), dtype=dtype
         )
         _transform_quad_points(
-            ref_quad_points, meshdata.facet2vert, meshdata.vert_coords, self.quad_points
+            ref_quad_points.astype(dtype), meshdata.facet2vert, meshdata.vert_coords,
+            self.quad_points
         )
 
-        self.quad_weights = quad_weights
+        self.quad_weights = quad_weights.astype(dtype)
 
 
 def _get_boundary_facet_info(
@@ -153,7 +161,7 @@ def _get_boundary_facet_info(
     fe_facet2cell = fe_space.mesh.topology.connectivity(2,3)
     boundary_cells = fe_facet2cell.array[fe_facet2cell.offsets[bi_to_fe_facets]]
     facet_centroids = _np.mean(bi_vert_coords[bi_facet2vert], axis=1)
-    normal_dirs = nh.eval(facet_centroids, boundary_cells).real
+    normal_dirs = nh.eval(facet_centroids, boundary_cells).real.astype(bi_vert_coords.dtype)
     flips = _np.sign(
         _np.sum(normals * normal_dirs, axis=1, keepdims=True)
     )

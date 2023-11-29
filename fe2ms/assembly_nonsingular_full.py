@@ -248,9 +248,9 @@ def assemble_B_integral(
                 cols.append(facet2edge[facet, i_edge_m])
                 vals.append(-integral * jacobian)
 
-    rows_array = _np.zeros(len(vals), dtype=_np.int64)
-    cols_array = _np.zeros(len(vals), dtype=_np.int64)
-    B_array = _np.zeros(len(vals))
+    rows_array = _np.zeros(len(vals), dtype=_np.int32)
+    cols_array = _np.zeros(len(vals), dtype=_np.int32)
+    B_array = _np.zeros(len(vals), dtype=basis.dtype)
     for i in range(len(rows)): # pylint: disable=consider-using-enumerate
         rows_array[i] = rows[i]
         cols_array[i] = cols[i]

@@ -52,7 +52,7 @@ class FEBISystem:
 
     def __init__(
         self, frequency, computation_volume: _ComputationVolume,
-        formulation: str
+        formulation: str, use_single_precision=False
     ):
         """
         Initialize system by associating it to a frequency and computation volume.
@@ -74,6 +74,11 @@ class FEBISystem:
             I-S edge enumeration.
             'teth' is a CFIE formulation which uses I-S edge enumeration. It reduces, but does not
             eliminate, the influence of interior resonances.
+        use_single_precision: bool, optional
+            Whether to use single precision in computations instead of double precision. This mainly
+            affects the most memory intense parts of system matrices - many other variables
+            will still be in default double precision. It affects speed very little since
+            many intermediate operations use default double precision.
         """
 
         self.spaces = None
@@ -99,6 +104,8 @@ class FEBISystem:
         self.M_prec = None
         self.K_prec = None
         self.L_prec = None
+
+        self.use_single_precision = use_single_precision
 
 
     # TODO: Make this private and do automatically at system creation instead. There might have
@@ -155,7 +162,7 @@ class FEBISystem:
         # Build connection matrix if needed
         if not load_data:
             T_SV, bi_meshdata = _connect_fe_bi_spaces(
-                fe_space, self.computation_volume.get_external_facets()
+                fe_space, self.computation_volume.get_external_facets(), self.use_single_precision
             )
             T_VS = T_SV.copy().T
         else:
@@ -164,7 +171,7 @@ class FEBISystem:
                 _dolfinx.mesh.create_submesh(fe_space.mesh, 2, ext_facets)[:2]
             bi_meshdata = _bi_space.BIMeshData(
                 bi_mesh, fe_space, fe_from_bi_facets_list,
-                ext_facets
+                ext_facets, self.use_single_precision
             )
 
         # Save trace data
@@ -498,10 +505,10 @@ class FEBISystemFull(FEBISystem):
 
     def __init__(
         self, frequency, computation_volume,
-        integral_equation
+        integral_equation, use_single_precision=False
     ):
 
-        super().__init__(frequency, computation_volume, integral_equation)
+        super().__init__(frequency, computation_volume, integral_equation, use_single_precision)
 
         # LU factorization object
         self._system_lufactor = None
@@ -561,12 +568,13 @@ class FEBISystemFull(FEBISystem):
         else:
             K_matrix, B_matrix = _assembly.assemble_KB_blocks(
                 self._k0, self.computation_volume,
-                self.spaces
+                self.spaces, self.use_single_precision
             )
 
             # Boundary integral matrices
             P_matrix, Q_matrix, self.K_prec, self.L_prec = _assembly.assemble_bi_blocks_full(
-                self._k0, self.spaces.bi_meshdata, self.spaces.bi_basisdata, quad_order_singular
+                self._k0, self.spaces.bi_meshdata, self.spaces.bi_basisdata, quad_order_singular,
+                self.use_single_precision
             )
 
             # Save block data
@@ -1021,7 +1029,10 @@ class FEBISystemACA(FEBISystem):
     FEBI system where the BI blocks are assembled using the adaptive cross approximation (ACA).
     """
 
-    def __init__(self, frequency, computation_volume: _ComputationVolume, integral_equation: str):
+    def __init__(
+        self, frequency, computation_volume: _ComputationVolume, integral_equation: str,
+        use_single_precision=False
+    ):
 
         super().__init__(frequency, computation_volume, integral_equation)
 
@@ -1063,7 +1074,7 @@ class FEBISystemACA(FEBISystem):
 
         K_matrix, B_matrix = _assembly.assemble_KB_blocks(
             self._k0, self.computation_volume,
-            self.spaces
+            self.spaces, self.use_single_precision
         )
 
         # Boundary integral blocks

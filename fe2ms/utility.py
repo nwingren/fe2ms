@@ -412,7 +412,7 @@ class FEBIBlocks:
     Q: _np.ndarray | _sparse.spmatrix
 
 
-def connect_fe_bi_spaces(fe_space, ext_facets):
+def connect_fe_bi_spaces(fe_space, ext_facets, use_single_precision):
     """
     Create a BI space from an existing FE space and list of external facets. The coupling is between
     lowest order Nédélec functions and RWG/Raviart-Thomas functions (unscaled by edge lengths).
@@ -423,6 +423,8 @@ def connect_fe_bi_spaces(fe_space, ext_facets):
         DOLFINx function space for the FE part.
     ext_facets : ndarray
         Array containing DOLFINx indices of facets at external boundary.
+    use_single_precision : bool
+        Whether to use single instead of double precision.
 
     Returns
     -------
@@ -434,7 +436,9 @@ def connect_fe_bi_spaces(fe_space, ext_facets):
 
     bi_mesh, fe_from_bi_facets_list, fe_from_bi_verts_list, unused_ \
         = _dolfinx.mesh.create_submesh(fe_space.mesh, 2, ext_facets)
-    bi_meshdata = _bi_space.BIMeshData(bi_mesh, fe_space, fe_from_bi_facets_list, ext_facets)
+    bi_meshdata = _bi_space.BIMeshData(
+        bi_mesh, fe_space, fe_from_bi_facets_list, ext_facets, use_single_precision
+    )
 
     fe_space.mesh.topology.create_connectivity(1, 0)
     edge2vert_fe = fe_space.mesh.topology.connectivity(1, 0).array.reshape((-1,2))
