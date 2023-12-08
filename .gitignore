@@ -37,3 +37,7 @@ _deps
 
 # Image files
 *.png
+
+# Documentation
+docs/_build
+docs/generated/
