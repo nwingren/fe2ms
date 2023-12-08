@@ -132,9 +132,9 @@ def assemble_bi_blocks_full(
     ----------
     k0 : float
         Free-space wavenumber of problem.
-    meshdata : febicode.utility.BIMeshData
+    meshdata : utility.BIMeshData
         Mesh data for the BI problem.
-    basisdata : febicode.rwg_rt_helpers.BIBasisData
+    basisdata : bi_space.BIBasisData
         Basis data for the BI problem.
     quad_order_singular : int
         Quadrature order to use in DEMCEM singular integral computations.
@@ -187,9 +187,9 @@ def assemble_bi_aca(
     ----------
     k0 : float
         Free-space wavenumber of problem.
-    meshdata : febicode.utility.BIMeshData
+    meshdata : utility.BIMeshData
         Mesh data for the BI problem.
-    basisdata : febicode.rwg_rt_helpers.BIBasisData
+    basisdata : bi_space.BIBasisData
         Basis data for the BI problem.
     recompress : bool
         Whether to recompress ACA blocks using QR and SVD.
@@ -303,9 +303,9 @@ def assemble_rhs(
         Formulation used.
     k0 : float
         Free-space wavenumber of problem.
-    meshdata : febicode.utility.BIMeshData
+    meshdata : utility.BIMeshData
         Mesh data for the BI problem.
-    basisdata : febicode.rwg_rt_helpers.BIBasisData
+    basisdata : bi_space.BIBasisData
         Basis data for the BI problem.
     source_fun : tuple
         Tuple containing functions giving the incident electric and magnetic fields at N points of
@@ -384,9 +384,9 @@ def _compute_singularities_KL_operators(
     ----------
     k0 : float
         Free-space wavenumber of problem.
-    meshdata : febicode.utility.BIMeshData
+    meshdata : utility.BIMeshData
         Mesh data for the BI problem.
-    basisdata : febicode.rwg_rt_helpers.BIBasisData
+    basisdata : bi_space.BIBasisData
         Basis data for the BI problem.
     N_quad : int
         Quadrature order to use in DEMCEM singular integral computations.

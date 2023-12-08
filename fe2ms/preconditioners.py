@@ -87,7 +87,7 @@ def iterative_ilu(
     Parameters
     ----------
     
-    system : FEBISystem
+    system : systems.FEBISystem
         System to precondition.
     scale : complex, optional
         Factor to scale sparisifed blocks by, by default None.
@@ -159,7 +159,7 @@ def iterative_petsc(
     Parameters
     ----------
     
-    system : FEBISystem
+    system : utility.FEBISystem
         System to precondition.
     scale : complex, optional
         Factor to scale sparisifed blocks by, by default None.

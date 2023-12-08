@@ -41,8 +41,11 @@ class ComputationVolume():
         Load mesh from file and associate material and boundary data to it.
 
         Materials are used in the general constitutive relations as follows:
+
             D = eps0 * epsr * E + eps0 * eta0 * xi * H
+            
             B = 1/c0 * zeta * E + mu0 * mur * H
+
         Each parameter can be either a scalar or a 3x3 tensor, depending on the material model. The
         models are
         Isotropic: (epsr, mur) where both parameters are scalars.
@@ -427,7 +430,7 @@ def connect_fe_bi_spaces(fe_space, ext_facets):
     -------
     fe2bi_connector : scipy.sparse.csr_array
         Sparse matrix T^SI which transforms FE DoFs to BI DoFs.
-    bi_meshdata : febicode.utility.BIMeshData
+    bi_meshdata : bi_space.BIMeshData
         Mesh and additional data for BI function space construction.
     """
 
