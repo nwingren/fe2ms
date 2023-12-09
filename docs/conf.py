@@ -19,6 +19,7 @@ extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.autosummary',
     'sphinx.ext.napoleon',
+    'sphinx_rtd_theme',
 ]
 
 autosummary_generate = True  # Turn on sphinx.ext.autosummary
