@@ -17,7 +17,7 @@ ext = [3]
 # Create FE-BI system and perform assembly
 
 cv = fe2ms.ComputationVolume('rotor.msh', mats, ext)
-system = fe2ms.FEBISystemACA(f0, cv, 'is-efie')
+system = fe2ms.FEBISystemACA(f0, cv)
 
 print('Start connection and assembly')
 tick = time.perf_counter()

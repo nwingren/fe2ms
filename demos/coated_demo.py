@@ -22,12 +22,11 @@ ext_surface = [4]
 # This uses the mesh file coated.msh which is created using gmsh in create_mesh_coated.py
 cv = fe2ms.ComputationVolume('coated.msh', materials, ext_surface, pec_surface)
 
-# System which will use the ACA for acceleration and a formulation based on the EFIE with volume
-# degrees of freedom split into exclusively in interior and exclusively on boundary ('is-efie')
-system = fe2ms.FEBISystemACA(f0, cv, 'is-efie')
+# System which will use the ACA for acceleration and the default (EFIE) formulation
+system = fe2ms.FEBISystemACA(f0, cv)
 
-# Commented line below is for a full (unaccelerated) system with the same formulation as above
-# system = fe2ms.FEBISystemFull(f0, cv, 'is-efie')
+# Commented line below is for a full (unaccelerated) system
+# system = fe2ms.FEBISystemFull(f0, cv)
 
 print('Start connection and assembly')
 tick = time.perf_counter()
