@@ -63,15 +63,19 @@ class FEBISystem:
             Frequency in Hz.
         computation_volume : utility.ComputationVolume
             FEBI computation volume defining mesh, material and boundaries.
-        formulation : {'is-efie', 'vs-efie', 'ej'}, optional.
+        formulation : {'is-efie', 'vs-efie', 'ej', 'teth'}, optional.
             Formulation to use for finite element block structure and and
             boundary integral operators, by default 'is-efie'
+
             'is-efie' uses I-S edge enumeration, i.e. explicit interior and surface finite element
             blocks, and uses the EFIE on the boundary.
+
             'vs-efie' uses V-S edge enumeration, i.e. one finite element block with transition
             operators to interior and surface, and uses the EFIE on the boundary.
+
             'ej' uses the symmetric formulation with both the EFIE and the MFIE. It requires use of
             I-S edge enumeration.
+            
             'teth' is a CFIE formulation which uses I-S edge enumeration. It reduces, but does not
             eliminate, the influence of interior resonances.
         """
@@ -498,13 +502,13 @@ class FEBISystemFull(FEBISystem):
 
     def __init__(
         self, frequency, computation_volume,
-        integral_equation=None
+        formulation=None
     ):
 
-        if integral_equation is None:
+        if formulation is None:
             super().__init__(frequency, computation_volume)
         else:
-            super().__init__(frequency, computation_volume, integral_equation)
+            super().__init__(frequency, computation_volume, formulation)
 
         # LU factorization object
         self._system_lufactor = None
@@ -741,7 +745,7 @@ class FEBISystemFull(FEBISystem):
         -------
         info : int
             0 if solver converged, >0 if solver did not converge,
-            >0 if illegal input or breakdown of solver.
+            <0 if illegal input or breakdown of solver.
         """
 
         if self._rhs is None:
@@ -943,7 +947,7 @@ class FEBISystemFull(FEBISystem):
         -------
         info : int
             0 if solver converged, >0 if solver did not converge,
-            >0 if illegal input or breakdown of solver.
+            <0 if illegal input or breakdown of solver.
         lu_solve : function
             Function corresponding to 'solve' operation for the LU factorization of the FE part
             which was used in the solution
@@ -1024,12 +1028,12 @@ class FEBISystemACA(FEBISystem):
     FEBI system where the BI blocks are assembled using the adaptive cross approximation (ACA).
     """
 
-    def __init__(self, frequency, computation_volume, integral_equation=None):
+    def __init__(self, frequency, computation_volume, formulation=None):
 
-        if integral_equation is None:
+        if formulation is None:
             super().__init__(frequency, computation_volume)
         else:
-            super().__init__(frequency, computation_volume, integral_equation)
+            super().__init__(frequency, computation_volume, formulation)
 
         # Far interactions used in solution
         self._far_operator = None
@@ -1126,7 +1130,7 @@ class FEBISystemACA(FEBISystem):
         -------
         info : int
             0 if solver converged, >0 if solver did not converge,
-            >0 if illegal input or breakdown of solver.
+            <0 if illegal input or breakdown of solver.
         """
 
         if self._rhs is None:
@@ -1374,7 +1378,7 @@ class FEBISystemACA(FEBISystem):
         -------
         info : int
             0 if solver converged, >0 if solver did not converge,
-            >0 if illegal input or breakdown of solver.
+            <0 if illegal input or breakdown of solver.
         lu_solve : function
             Function corresponding to 'solve' operation for the LU factorization of the FE part
             which was used in the solution
