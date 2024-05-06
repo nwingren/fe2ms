@@ -24,6 +24,7 @@ import dolfinx as _dolfinx
 import ufl as _ufl
 from adaptoctree import tree as _tree, morton as _morton
 
+import demcem4py
 import fe2ms.bi_space as _bi_space
 import fe2ms.assembly_nonsingular_full as _assembly_full
 import fe2ms.assembly_nonsingular_aca as _assembly_aca
@@ -31,7 +32,6 @@ from fe2ms.utility import(
     ComputationVolume as _ComputationVolume,
     FEBISpaces as _FEBISpaces
 )
-from fe2ms.bindings import demcem_bindings as _demcem_bindings
 
 
 def assemble_KB_blocks(
@@ -460,7 +460,7 @@ def _compute_singularities_KL_operators(
             signs_m[i] = meshdata.edge_facet_signs[e, meshdata.edge2facet[e] == facet_P][0]
 
         r_coords = meshdata.vert_coords[verts_P[local_order]]
-        _demcem_bindings.ws_st_rwg(
+        demcem4py.ws_st_rwg(
             r_coords[0], r_coords[1], r_coords[2], k0, N_quad, sing_vals
         )
 
@@ -538,7 +538,7 @@ def _compute_singularities_KL_operators(
             rows = [edges_m[i // 3] for i in range(9)]
             cols = [edges_n[i % 3] for i in range(9)]
 
-            _demcem_bindings.ws_ea_rwg(
+            demcem4py.ws_ea_rwg(
                 meshdata.vert_coords[vert_1], meshdata.vert_coords[vert_2],
                 meshdata.vert_coords[vert_3], meshdata.vert_coords[vert_4],
                 k0, N_quad, N_quad, sing_vals
@@ -557,7 +557,7 @@ def _compute_singularities_KL_operators(
             L_cols += rows
             L_vals += L_vals[-9:]
 
-            _demcem_bindings.ss_ea_rwg(
+            demcem4py.ss_ea_rwg(
                 meshdata.vert_coords[vert_1], meshdata.vert_coords[vert_2],
                 meshdata.vert_coords[vert_3], meshdata.vert_coords[vert_4],
                 k0, N_quad, N_quad, sing_vals
@@ -629,7 +629,7 @@ def _compute_singularities_KL_operators(
                 rows = [edges_m[i // 3] for i in range(9)]
                 cols = [edges_n[i % 3] for i in range(9)]
 
-                _demcem_bindings.ws_va_rwg(
+                demcem4py.ws_va_rwg(
                     meshdata.vert_coords[vert_1], meshdata.vert_coords[vert_2],
                     meshdata.vert_coords[vert_3], meshdata.vert_coords[vert_4],
                     meshdata.vert_coords[vert_5], k0, N_quad, N_quad, N_quad, sing_vals
@@ -648,7 +648,7 @@ def _compute_singularities_KL_operators(
                 L_cols += rows
                 L_vals += L_vals[-9:]
 
-                _demcem_bindings.ss_va_rwg(
+                demcem4py.ss_va_rwg(
                     meshdata.vert_coords[vert_1], meshdata.vert_coords[vert_2],
                     meshdata.vert_coords[vert_3], meshdata.vert_coords[vert_4],
                     meshdata.vert_coords[vert_5], k0, N_quad, N_quad, N_quad, sing_vals
