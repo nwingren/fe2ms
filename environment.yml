@@ -1,0 +1,14 @@
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - fenics-dolfinx=0.6.0
+  - mpich
+  - petsc=*=complex*
+  - scipy
+  - matplotlib
+  - numba
+  - pybind11>=2.6.1
+  - scikit-umfpack
+  - python-gmsh
+  - pip
