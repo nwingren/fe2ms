@@ -24,7 +24,7 @@ mamba activate ENV_NAME
 
 ### Install FE2MS
 
-The FE2MS package and its dependencies is automatically installed by
+The FE2MS package and its dependencies are automatically installed by
 ```bash
 pip install https://github.com/nwingren/fe2ms/archive/refs/tags/v1.0.0.tar.gz
 ```
