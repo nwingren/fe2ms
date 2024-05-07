@@ -3,6 +3,7 @@ channels:
 dependencies:
   - python=3.10
   - compilers
+  - numpy
   - fenics-dolfinx=0.6.0
   - mpich
   - petsc=*=complex*
@@ -10,6 +11,7 @@ dependencies:
   - matplotlib
   - numba
   - pybind11>=2.6.1
-  - scikit-umfpack
   - python-gmsh
   - pip
+  - pip:
+    - scikit-umfpack
