@@ -15,12 +15,14 @@ The simplest way to install the package is using mamba or conda as a package man
 
 ### Install mamba
 
-Please follow [these](https://github.com/conda-forge/miniforge#mambaforge) instructions to install mamba. Following this, it is recommended that you create a new environment as follows (```ENV_NAME``` can be changed to your preferred environment name).
+Please follow [these](https://github.com/conda-forge/miniforge#mambaforge) instructions to install mamba. Following this, it is highly recommended that you create a new environment as follows (```ENV_NAME``` can be changed to your preferred environment name).
 
 ```bash
 mamba create --clone base --name ENV_NAME
 mamba activate ENV_NAME
 ```
+
+The use of an isolated mamba/conda environment like this is particularly important due to the mixed use of conda and pip sources for dependencies.
 
 ### Install FE2MS
 
