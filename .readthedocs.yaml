@@ -17,6 +17,9 @@ build:
     post_install:
       - pip install .
 
+conda:
+  enviromnent: environment.yml
+
 # Build documentation in the "docs/" directory with Sphinx
 sphinx:
   configuration: docs/conf.py
