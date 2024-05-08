@@ -15,7 +15,7 @@ build:
     # golang: "1.20"
   jobs:
     post_install:
-      pip install --no-deps .
+      - pip install --no-deps .
 
 conda:
   environment: environment.yml
