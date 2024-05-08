@@ -15,6 +15,7 @@ build:
     # golang: "1.20"
   jobs:
     post_install:
+      - mamba install sphinx-rtd-theme
       - pip install .
 
 conda:
@@ -36,6 +37,6 @@ sphinx:
 # Optional but recommended, declare the Python requirements required
 # to build your documentation
 # See https://docs.readthedocs.io/en/stable/guides/reproducible-builds.html
-python:
-  install:
-    - requirements: sphinx-rtd-theme
+# python:
+#   install:
+#     - requirements: sphinx-rtd-theme
