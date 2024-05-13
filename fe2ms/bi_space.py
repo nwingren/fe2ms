@@ -24,6 +24,8 @@ import ufl as _ufl
 import basix as _basix
 from petsc4py import PETSc as _PETSc
 
+from fe2ms.normals_and_tangents import facet_vector_approximation
+
 class BIMeshData:
     """
     Class containing BI mesh and required additional data.
@@ -94,15 +96,16 @@ def _get_boundary_facet_info(
     fe_space, bi_vert_coords, bi_facet2vert, bi_to_fe_facets, ext_facets
 ):
 
-    # Lengthy code to project facet normals into a simple CG vector function space. These normals
-    # are fairly good, but normals computed using edge cross products are more accurate.
-    # Since facet areas need to be computed anyway, the normals from projections are only used to
-    # correct the sign of the geometrically computed normals.
-    # Projections are based on code from dolfinx_mpc, see
-    # https://github.com/jorgensd/dolfinx_mpc/blob/main/python/dolfinx_mpc/utils/mpc_utils.py
+    ################################################################################################
+    # Start of external code for facet normal computations
+    # Modified from https://gist.github.com/hherlyng/cb3ab37dc58205bcecbc9a6e15b1267f
+    # Copyright (C) 2023 Jørgen S. Dokken and Halvor Herlyng
+    #
+    # SPDX-License-Identifier:    MIT
+    ################################################################################################
 
     n = _ufl.FacetNormal(fe_space.mesh)
-    V = _dolfinx.fem.VectorFunctionSpace(fe_space.mesh, ("CG", 1))
+    V = _dolfinx.fem.functionspace(fe_space.mesh, ("CG", 1, (fe_space.mesh.geometry.dim,)))
     nh = _dolfinx.fem.Function(V)
     u, v = _ufl.TrialFunction(V), _ufl.TestFunction(V)
     bilinear_form = _dolfinx.fem.form(_ufl.inner(u, v) * _ufl.ds)
@@ -113,7 +116,7 @@ def _get_boundary_facet_info(
     deac_blocks = all_blocks[_np.isin(all_blocks, top_blocks, invert=True)]
     pattern = _dolfinx.fem.create_sparsity_pattern(bilinear_form)
     pattern.insert_diagonal(deac_blocks)
-    pattern.assemble()
+    pattern.finalize()
 
     u_0 = _dolfinx.fem.Function(V)
     u_0.vector.set(0)
@@ -122,15 +125,21 @@ def _get_boundary_facet_info(
     A = _dolfinx.cpp.la.petsc.create_matrix(fe_space.mesh.comm, pattern)
     A.zeroEntries()
 
-    form_coeffs = _dolfinx.cpp.fem.pack_coefficients(bilinear_form)
-    form_consts = _dolfinx.cpp.fem.pack_constants(bilinear_form)
-    _dolfinx.cpp.fem.petsc.assemble_matrix(A, bilinear_form, form_consts, form_coeffs, [bc_deac])
+    form_coeffs = _dolfinx.cpp.fem.pack_coefficients(bilinear_form._cpp_object)
+    form_consts = _dolfinx.cpp.fem.pack_constants(bilinear_form._cpp_object)
+    _dolfinx.fem.petsc.assemble_matrix(
+        A, bilinear_form, constants=form_consts, coeffs=form_coeffs, bcs=[bc_deac]
+    )
     A.assemblyBegin(_PETSc.Mat.AssemblyType.FLUSH) # pylint: disable=no-member
     A.assemblyEnd(_PETSc.Mat.AssemblyType.FLUSH) # pylint: disable=no-member
-    _dolfinx.cpp.fem.petsc.insert_diagonal(A, bilinear_form.function_spaces[0], [bc_deac], 1.0)
+    _dolfinx.cpp.fem.petsc.insert_diagonal( # pylint: disable=no-member
+        A=A, V=bilinear_form.function_spaces[0], bcs=[bc_deac._cpp_object], diagonal=1.0
+    )
     A.assemble()
     linear_form = _dolfinx.fem.form(_ufl.inner(n, v) * _ufl.ds)
     b = _dolfinx.fem.petsc.assemble_vector(linear_form)
+    _dolfinx.fem.petsc.apply_lifting(b, [bilinear_form], [[bc_deac]])
+    b.ghostUpdate(addv=_PETSc.InsertMode.ADD_VALUES, mode=_PETSc.ScatterMode.REVERSE)
     _dolfinx.fem.petsc.set_bc(b, [bc_deac])
 
     # Solve for facet normals
@@ -139,6 +148,10 @@ def _get_boundary_facet_info(
     solver.rtol = 1e-8
     solver.setOperators(A)
     solver.solve(b, nh.vector)
+
+    ################################################################################################
+    # End of external code for facet normal computations
+    ################################################################################################
 
     # Compute normals and facet areas from edges
     e0 = _np.diff(bi_vert_coords[bi_facet2vert[:,1:]], axis=1).squeeze()
