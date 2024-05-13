@@ -1,16 +1,15 @@
 channels:
   - conda-forge
 dependencies:
-  - python=3.10
+  - python=3.12
   - compilers
   - numpy
-  - fenics-dolfinx=0.6.0
+  - fenics-dolfinx=0.8.0
   - mpich
   - petsc=*=complex*
   - scipy
   - matplotlib
   - numba
-  - pybind11>=2.6.1
   - python-gmsh
   - pip
   - libblas
