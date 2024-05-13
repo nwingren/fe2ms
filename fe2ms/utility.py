@@ -176,7 +176,7 @@ class ComputationVolume():
         if (self.bi_material and any(self.anisotropy)) or self.anisotropy[0]:
             # Create discontinuous Galerkin tensor function
             ufl_element = _ufl.TensorElement('DG', cell=self.mesh.ufl_cell(), degree=0, shape=(3,3))
-            Q = _dolfinx.fem.FunctionSpace(self.mesh, ufl_element)
+            Q = _dolfinx.fem.functionspace(self.mesh, ufl_element)
             Qsub = [Q.sub(i) for i in range(9)]
             epsr = _dolfinx.fem.Function(Q)
 
@@ -196,7 +196,7 @@ class ComputationVolume():
                     epsr.x.array[cell_dofs] = component
         else:
             # Create discontinuous Galerkin function
-            Q = _dolfinx.fem.FunctionSpace(self.mesh, ('DG', 0))
+            Q = _dolfinx.fem.functionspace(self.mesh, ('DG', 0))
             epsr = _dolfinx.fem.Function(Q)
 
             # Set values across cell tags in mesh
@@ -244,7 +244,7 @@ class ComputationVolume():
                     inv_mur.x.array[cell_dofs] = component
         else:
             # Create discontinuous Galerkin function
-            Q = _dolfinx.fem.FunctionSpace(self.mesh, ('DG', 0))
+            Q = _dolfinx.fem.functionspace(self.mesh, ('DG', 0))
             inv_mur = _dolfinx.fem.Function(Q)
 
             # Set values across cell tags in mesh
@@ -270,13 +270,13 @@ class ComputationVolume():
 
         # Return zero-function if no material is bi-isotropic/bi-anisotropic
         if not self.bi_material:
-            Q = _dolfinx.fem.FunctionSpace(self.mesh, ('DG', 0))
+            Q = _dolfinx.fem.functionspace(self.mesh, ('DG', 0))
             return _dolfinx.fem.Function(Q)
 
         if any(self.anisotropy):
             # Create discontinuous Galerkin tensor function
             ufl_element = _ufl.TensorElement('DG', cell=self.mesh.ufl_cell(), degree=0, shape=(3,3))
-            Q = _dolfinx.fem.FunctionSpace(self.mesh, ufl_element)
+            Q = _dolfinx.fem.functionspace(self.mesh, ufl_element)
             Qsub = [Q.sub(i) for i in range(9)]
             xi = _dolfinx.fem.Function(Q)
 
@@ -303,7 +303,7 @@ class ComputationVolume():
                     xi.x.array[cell_dofs] = component
         else:
             # Create discontinuous Galerkin function
-            Q = _dolfinx.fem.FunctionSpace(self.mesh, ('DG', 0))
+            Q = _dolfinx.fem.functionspace(self.mesh, ('DG', 0))
             xi = _dolfinx.fem.Function(Q)
 
             # Set values across cell tags in mesh
@@ -336,13 +336,13 @@ class ComputationVolume():
 
         # Return zero-function if no material is bi-isotropic/bi-anisotropic
         if not self.bi_material:
-            Q = _dolfinx.fem.FunctionSpace(self.mesh, ('DG', 0))
+            Q = _dolfinx.fem.functionspace(self.mesh, ('DG', 0))
             return _dolfinx.fem.Function(Q)
 
         if any(self.anisotropy):
             # Create discontinuous Galerkin tensor function
             ufl_element = _ufl.TensorElement('DG', cell=self.mesh.ufl_cell(), degree=0, shape=(3,3))
-            Q = _dolfinx.fem.FunctionSpace(self.mesh, ufl_element)
+            Q = _dolfinx.fem.functionspace(self.mesh, ufl_element)
             Qsub = [Q.sub(i) for i in range(9)]
             zeta = _dolfinx.fem.Function(Q)
 
@@ -369,7 +369,7 @@ class ComputationVolume():
                     zeta.x.array[cell_dofs] = component
         else:
             # Create discontinuous Galerkin function
-            Q = _dolfinx.fem.FunctionSpace(self.mesh, ('DG', 0))
+            Q = _dolfinx.fem.functionspace(self.mesh, ('DG', 0))
             zeta = _dolfinx.fem.Function(Q)
 
             # Set values across cell tags in mesh
@@ -395,10 +395,10 @@ class FEBISpaces:
     fe_space: _dolfinx.fem.FunctionSpace
     bi_meshdata: _bi_space.BIMeshData
     bi_basisdata: _bi_space.BIBasisData
-    T_SV: _sparse.spmatrix
-    T_VS: _sparse.spmatrix
-    T_IV: _sparse.spmatrix
-    T_VI: _sparse.spmatrix
+    T_SV: _sparse.sparray
+    T_VS: _sparse.sparray
+    T_IV: _sparse.sparray
+    T_VI: _sparse.sparray
     fe_size: int
     bi_size: int
 
@@ -408,10 +408,10 @@ class FEBIBlocks:
     """
     Class for collecting FE-BI matrix blocks
     """
-    K: _sparse.spmatrix
-    B: _sparse.spmatrix
-    P: _np.ndarray | _sparse.spmatrix
-    Q: _np.ndarray | _sparse.spmatrix
+    K: _sparse.sparray
+    B: _sparse.sparray
+    P: _np.ndarray | _sparse.sparray
+    Q: _np.ndarray | _sparse.sparray
 
 
 def connect_fe_bi_spaces(fe_space, ext_facets):
@@ -442,6 +442,7 @@ def connect_fe_bi_spaces(fe_space, ext_facets):
     edge2vert_fe = fe_space.mesh.topology.connectivity(1, 0).array.reshape((-1,2))
     fe_space.mesh.topology.create_connectivity(2, 3)
     facet2cell_fe = fe_space.mesh.topology.connectivity(2, 3)
+    fe_space.mesh.topology.create_connectivity(1, 3)
 
     num_edges_fe = fe_space.mesh.topology.index_map(1).size_local
     num_verts_fe = fe_space.mesh.topology.index_map(0).size_local

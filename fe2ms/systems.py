@@ -152,7 +152,7 @@ class FEBISystem:
                     )
                 T_SV, T_VS = loaded[1:]
 
-        fe_space = _dolfinx.fem.FunctionSpace(
+        fe_space = _dolfinx.fem.functionspace(
             self.computation_volume.mesh, ('N1curl', 1)
         )
 

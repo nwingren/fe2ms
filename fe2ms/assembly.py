@@ -107,8 +107,8 @@ def assemble_KB_blocks(
         )
     K_matrix = _dolfinx.fem.assemble_matrix(form, bcs=boundary_conditions)
 
-    K_matrix.finalize() # pylint: disable=no-member
-    K_matrix = _sparse.csr_array((K_matrix.data, K_matrix.indices, K_matrix.indptr)) # pylint: disable=no-member
+    K_matrix.scatter_reverse()
+    K_matrix = _sparse.csr_array((K_matrix.data, K_matrix.indices, K_matrix.indptr))
 
     rows, cols, B_vals = _assembly_full.assemble_B_integral(
         function_spaces.bi_basisdata.basis, function_spaces.bi_basisdata.quad_weights,
