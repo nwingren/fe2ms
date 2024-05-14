@@ -20,11 +20,10 @@ import numba as _nb
 import numpy as _np
 from scipy import linalg as _linalg
 import dolfinx as _dolfinx
+import dolfinx.fem.petsc as _dolfinx_petsc
 import ufl as _ufl
 import basix as _basix
 from petsc4py import PETSc as _PETSc
-
-from fe2ms.normals_and_tangents import facet_vector_approximation
 
 class BIMeshData:
     """
@@ -127,20 +126,20 @@ def _get_boundary_facet_info(
 
     form_coeffs = _dolfinx.cpp.fem.pack_coefficients(bilinear_form._cpp_object)
     form_consts = _dolfinx.cpp.fem.pack_constants(bilinear_form._cpp_object)
-    _dolfinx.fem.petsc.assemble_matrix(
-        A, bilinear_form, constants=form_consts, coeffs=form_coeffs, bcs=[bc_deac]
+    _dolfinx_petsc.assemble_matrix_mat(
+        A, bilinear_form, bcs=[bc_deac], constants=form_consts, coeffs=form_coeffs
     )
     A.assemblyBegin(_PETSc.Mat.AssemblyType.FLUSH) # pylint: disable=no-member
     A.assemblyEnd(_PETSc.Mat.AssemblyType.FLUSH) # pylint: disable=no-member
-    _dolfinx.cpp.fem.petsc.insert_diagonal( # pylint: disable=no-member
+    _dolfinx.cpp.fem.petsc.insert_diagonal(
         A=A, V=bilinear_form.function_spaces[0], bcs=[bc_deac._cpp_object], diagonal=1.0
     )
     A.assemble()
     linear_form = _dolfinx.fem.form(_ufl.inner(n, v) * _ufl.ds)
-    b = _dolfinx.fem.petsc.assemble_vector(linear_form)
-    _dolfinx.fem.petsc.apply_lifting(b, [bilinear_form], [[bc_deac]])
-    b.ghostUpdate(addv=_PETSc.InsertMode.ADD_VALUES, mode=_PETSc.ScatterMode.REVERSE)
-    _dolfinx.fem.petsc.set_bc(b, [bc_deac])
+    b = _dolfinx_petsc.assemble_vector(linear_form)
+    _dolfinx_petsc.apply_lifting(b, [bilinear_form], [[bc_deac]])
+    b.ghostUpdate(addv=_PETSc.InsertMode.ADD_VALUES, mode=_PETSc.ScatterMode.REVERSE) # pylint: disable=no-member
+    _dolfinx_petsc.set_bc(b, [bc_deac])
 
     # Solve for facet normals
     solver = _PETSc.KSP().create(fe_space.mesh.comm) # pylint: disable=no-member

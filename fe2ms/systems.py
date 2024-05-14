@@ -279,7 +279,7 @@ class FEBISystem:
         phi_p = _np.arctan2(polarization[1], polarization[0])
         theta_p = _np.arccos(polarization[2])
         eta0 = _np.sqrt(_mu0 / _eps0)
-        
+
         def Ed(x):
             x -= origin
             r = _np.sqrt(x[:,0]**2 + x[:,1]**2 + x[:,2]**2)
@@ -301,7 +301,7 @@ class FEBISystem:
                 + theta_hat * 1j * self._k0 * eta0 * dipole_moment * _np.sin(theta) / (4 * _np.pi * r)
                 * (1 + 1 / (1j * self._k0 * r) - 1 / (self._k0 * r)**2) * _np.exp(-1j * self._k0 * r)
             ).T
-        
+
         def Hd_bar(x):
             x -= origin
             r = _np.sqrt(x[:,0]**2 + x[:,1]**2 + x[:,2]**2)
@@ -316,7 +316,7 @@ class FEBISystem:
                 phi_hat * 1j * self._k0 * dipole_moment * _np.sin(theta) / (4 * _np.pi * r)
                 * (1 + 1 / (1j * self._k0 * r)) * _np.exp(-1j * self._k0 * r) * eta0
             ).T
-        
+
         self._source_fun = (Ed, Hd_bar)
 
         b_inc = _assembly.assemble_rhs(
@@ -442,7 +442,7 @@ class FEBISystem:
         bb_tree = _dolfinx.geometry.bb_tree(self.spaces.fe_space.mesh, 3)
         midpoint_tree = _dolfinx.geometry.create_midpoint_tree(
             self.spaces.fe_space.mesh, 3,
-            _np.arange(self.spaces.fe_space.mesh.geometry.dofmap.num_nodes, dtype=_np.int32)
+            _np.arange(self.spaces.fe_space.mesh.geometry.dofmap.shape[0], dtype=_np.int32)
         )
 
         # Find which points are in FE and BI regions
@@ -665,7 +665,7 @@ class FEBISystemFull(FEBISystem):
             if self._formulation == 'is-efie':
                 blocks = [
                     [K_II, K_IS, _np.zeros(K_IS.shape)],
-                    [K_SI.toarray(), K_SS.toarray(), self._system_blocks.B.toarray()],
+                    [K_SI.toarray(), K_SS.toarray(), self._system_blocks.B.toarray()], # pylint: disable=no-member
                     [_np.zeros(K_SI.shape), self._system_blocks.P, self._system_blocks.Q]
                 ]
             elif self._formulation == 'vs-efie':
@@ -691,7 +691,7 @@ class FEBISystemFull(FEBISystem):
             elif self._formulation == 'teth':
                 blocks = [
                     [K_II, K_IS, _np.zeros(K_IS.shape)],
-                    [K_SI.toarray(), K_SS.toarray(), self._system_blocks.B.toarray()],
+                    [K_SI.toarray(), K_SS.toarray(), self._system_blocks.B.toarray()], # pylint: disable=no-member
                     [
                         _np.zeros(K_SI.shape),
                         0.5 * (self._system_blocks.P - self._system_blocks.Q),
@@ -914,7 +914,7 @@ class FEBISystemFull(FEBISystem):
             self.sol_H *= _np.sqrt(_mu0 / _eps0)
 
         return info
-    
+
 
     def solve_semidirect(
         self, solver=None, counter=None, solver_tol=1e-5, lu_solve=None
@@ -959,17 +959,17 @@ class FEBISystemFull(FEBISystem):
         if self._system_blocks is None:
             LOGGER.info('System not assembled, doing that before solving')
             self.assemble()
-        
+
         if solver is None:
             solver = _sparse_linalg.lgmres
 
         if self._formulation == 'ej':
             raise Exception('Semidirect solution not available for ej formulation')
-        
+
         fe_size = self.spaces.fe_size
         bi_size = self.spaces.bi_size
         in_size = fe_size - bi_size
-        
+
         if lu_solve is None:
             if self._formulation != 'vs-efie':
                 K_II = self.spaces.T_IV @ self._system_blocks.K @ self.spaces.T_VI
@@ -987,10 +987,10 @@ class FEBISystemFull(FEBISystem):
             # Eliminate interior DoFs
             _sparse.linalg.use_solver(useUmfpack=True)
             K_LU = _sparse.linalg.factorized(K)
-        
+
         else:
             K_LU = lu_solve
-        
+
         if self._formulation == 'teth':
             def matvec_fun(x):
                 KBx = K_LU(_np.concatenate((_np.zeros(in_size), self._system_blocks.B @ x)))
@@ -1139,7 +1139,7 @@ class FEBISystemACA(FEBISystem):
         if self._system_blocks is None:
             LOGGER.info('System not assembled, doing that before solving')
             self.assemble()
-        
+
         if solver is None:
             solver = _sparse_linalg.lgmres
 
@@ -1150,7 +1150,7 @@ class FEBISystemACA(FEBISystem):
                 self.M_prec = _precs.direct(self)
         else:
             self.M_prec = preconditioner
-        
+
         if self._formulation == 'ej':
             bi_scale = 1.
 
@@ -1164,7 +1164,7 @@ class FEBISystemACA(FEBISystem):
         fe_size = self.spaces.fe_size
         bi_size = self.spaces.bi_size
         in_size = fe_size - bi_size
-        
+
         if self._formulation == 'is-efie':
             if right_prec:
                 def matvec_fun(x):
@@ -1345,7 +1345,7 @@ class FEBISystemACA(FEBISystem):
             self.sol_H *= _np.sqrt(_mu0 / _eps0)
 
         return info
-    
+
 
     def solve_semidirect(
         self, solver=None, counter=None, solver_tol=1e-5, lu_solve=None
@@ -1390,17 +1390,17 @@ class FEBISystemACA(FEBISystem):
         if self._system_blocks is None:
             LOGGER.info('System not assembled, doing that before solving')
             self.assemble()
-        
+
         if solver is None:
             solver = _sparse_linalg.lgmres
 
         if self._formulation == 'ej':
             raise Exception('Semidirect solution not available for ej formulation')
-        
+
         fe_size = self.spaces.fe_size
         bi_size = self.spaces.bi_size
         in_size = fe_size - bi_size
-        
+
         if lu_solve is None:
             if self._formulation != 'vs-efie':
                 K_II = self.spaces.T_IV @ self._system_blocks.K @ self.spaces.T_VI
@@ -1418,10 +1418,10 @@ class FEBISystemACA(FEBISystem):
             # Eliminate interior DoFs
             _sparse.linalg.use_solver(useUmfpack=True)
             K_LU = _sparse.linalg.factorized(K)
-        
+
         else:
             K_LU = lu_solve
-        
+
         if self._formulation == 'teth':
             def matvec_fun(x):
                 KBx = K_LU(_np.concatenate((_np.zeros(in_size), self._system_blocks.B @ x)))
