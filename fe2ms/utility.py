@@ -20,11 +20,11 @@ from dataclasses import dataclass as _dataclass
 import numpy as _np
 from scipy import sparse as _sparse
 
+from mpi4py import MPI as _MPI
 import gmsh as _gmsh
 import dolfinx as _dolfinx
 import ufl as _ufl
 from dolfinx.io import gmshio as _gmshio
-from mpi4py import MPI as _MPI
 
 import fe2ms.bi_space as _bi_space
 

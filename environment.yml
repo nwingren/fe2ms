@@ -3,14 +3,14 @@ channels:
 dependencies:
   - python=3.12
   - compilers
-  - numpy
-  - fenics-dolfinx=0.8.0
+  - numpy=1.26
+  - fenics-dolfinx=0.8
   - mpich
   - petsc=*=complex*
-  - scipy
+  - scipy=1.13
   - matplotlib
-  - numba
-  - python-gmsh
+  - numba=0.59
+  - python-gmsh=4.12
   - pip
   - libblas
   - libcblas

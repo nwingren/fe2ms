@@ -15,7 +15,7 @@ The simplest way to install the package is using mamba or conda as a package man
 
 ### Install mamba
 
-Please follow [these](https://github.com/conda-forge/miniforge#mambaforge) instructions to install mamba. Following this, it is highly recommended that you create a new environment as follows (```ENV_NAME``` can be changed to your preferred environment name).
+Please follow [these](https://github.com/conda-forge/miniforge#mambaforge) instructions to install mamba. Following this, it is highly recommended that you create a new environment as follows (```ENV_NAME``` can be changed to your preferred environment name). Note that the Python version 3.12 is explicitly used.
 
 ```bash
 mamba create --name ENV_NAME python=3.12
@@ -30,6 +30,8 @@ The FE2MS package and its dependencies are automatically installed by
 ```bash
 pip install https://github.com/nwingren/fe2ms/archive/refs/tags/v0.2.0.tar.gz
 ```
+
+This installs the packages listed in [environment.yml](environment.yml), as well as [AdaptOctree](https://github.com/Excalibur-SLE/AdaptOctree) and [demcem4py](https://github.com/nwingren/demcem4py).
 
 ## Demos
 
