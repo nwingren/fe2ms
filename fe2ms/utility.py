@@ -175,8 +175,7 @@ class ComputationVolume():
 
         if (self.bi_material and any(self.anisotropy)) or self.anisotropy[0]:
             # Create discontinuous Galerkin tensor function
-            ufl_element = _ufl.TensorElement('DG', cell=self.mesh.ufl_cell(), degree=0, shape=(3,3))
-            Q = _dolfinx.fem.functionspace(self.mesh, ufl_element)
+            Q = _dolfinx.fem.functionspace(self.mesh, ('DG', 0, (3,3)))
             Qsub = [Q.sub(i) for i in range(9)]
             epsr = _dolfinx.fem.Function(Q)
 
@@ -192,7 +191,7 @@ class ComputationVolume():
 
                 # Each subspace (tensor component) is set separately
                 for subspace, component in zip(Qsub, tensor_mat):
-                    cell_dofs = subspace.dofmap.list.array[cells]
+                    cell_dofs = subspace.dofmap.list[cells]
                     epsr.x.array[cell_dofs] = component
         else:
             # Create discontinuous Galerkin function
@@ -223,8 +222,7 @@ class ComputationVolume():
         """
         if (self.bi_material and any(self.anisotropy)) or self.anisotropy[1]:
             # Create discontinuous Galerkin tensor function
-            ufl_element = _ufl.TensorElement('DG', cell=self.mesh.ufl_cell(), degree=0, shape=(3,3))
-            Q = _dolfinx.fem.FunctionSpace(self.mesh, ufl_element)
+            Q = _dolfinx.fem.functionspace(self.mesh, ('DG', 0, (3,3)))
             Qsub = [Q.sub(i) for i in range(9)]
             inv_mur = _dolfinx.fem.Function(Q)
 
@@ -240,7 +238,7 @@ class ComputationVolume():
 
                 # Each subspace (tensor component) is set separately
                 for subspace, component in zip(Qsub, tensor_mat):
-                    cell_dofs = subspace.dofmap.list.array[cells]
+                    cell_dofs = subspace.dofmap.list[cells]
                     inv_mur.x.array[cell_dofs] = component
         else:
             # Create discontinuous Galerkin function
@@ -275,8 +273,7 @@ class ComputationVolume():
 
         if any(self.anisotropy):
             # Create discontinuous Galerkin tensor function
-            ufl_element = _ufl.TensorElement('DG', cell=self.mesh.ufl_cell(), degree=0, shape=(3,3))
-            Q = _dolfinx.fem.functionspace(self.mesh, ufl_element)
+            Q = _dolfinx.fem.functionspace(self.mesh, ('DG', 0, (3,3)))
             Qsub = [Q.sub(i) for i in range(9)]
             xi = _dolfinx.fem.Function(Q)
 
@@ -299,7 +296,7 @@ class ComputationVolume():
 
                 # Each subspace (tensor component) is set separately
                 for subspace, component in zip(Qsub, tensor_mat):
-                    cell_dofs = subspace.dofmap.list.array[cells]
+                    cell_dofs = subspace.dofmap.list[cells]
                     xi.x.array[cell_dofs] = component
         else:
             # Create discontinuous Galerkin function
@@ -341,8 +338,7 @@ class ComputationVolume():
 
         if any(self.anisotropy):
             # Create discontinuous Galerkin tensor function
-            ufl_element = _ufl.TensorElement('DG', cell=self.mesh.ufl_cell(), degree=0, shape=(3,3))
-            Q = _dolfinx.fem.functionspace(self.mesh, ufl_element)
+            Q = _dolfinx.fem.functionspace(self.mesh, ('DG', 0, (3,3)))
             Qsub = [Q.sub(i) for i in range(9)]
             zeta = _dolfinx.fem.Function(Q)
 
@@ -365,7 +361,7 @@ class ComputationVolume():
 
                 # Each subspace (tensor component) is set separately
                 for subspace, component in zip(Qsub, tensor_mat):
-                    cell_dofs = subspace.dofmap.list.array[cells]
+                    cell_dofs = subspace.dofmap.list[cells]
                     zeta.x.array[cell_dofs] = component
         else:
             # Create discontinuous Galerkin function
