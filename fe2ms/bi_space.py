@@ -105,7 +105,7 @@ def _get_boundary_facet_info(
     ################################################################################################
 
     n = _ufl.FacetNormal(fe_space.mesh)
-    V = _dolfinx.fem.functionspace(fe_space.mesh, ("CG", 1, (fe_space.mesh.geometry.dim,)))
+    V = _dolfinx.fem.functionspace(fe_space.mesh, ("CG", 1, (3,)))
     nh = _dolfinx.fem.Function(V)
     u, v = _ufl.TrialFunction(V), _ufl.TestFunction(V)
     bilinear_form = _dolfinx.fem.form(_ufl.inner(u, v) * _ufl.ds)

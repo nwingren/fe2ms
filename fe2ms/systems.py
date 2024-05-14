@@ -439,14 +439,14 @@ class FEBISystem:
         efield_near = _np.zeros_like(points_near, dtype=_np.complex128)
 
         # Trees for finding dolfinx geoemtry
-        bb_tree = _dolfinx.geometry.BoundingBoxTree(self.spaces.fe_space.mesh, 3)
+        bb_tree = _dolfinx.geometry.bb_tree(self.spaces.fe_space.mesh, 3)
         midpoint_tree = _dolfinx.geometry.create_midpoint_tree(
             self.spaces.fe_space.mesh, 3,
             _np.arange(self.spaces.fe_space.mesh.geometry.dofmap.num_nodes, dtype=_np.int32)
         )
 
         # Find which points are in FE and BI regions
-        coll = _dolfinx.geometry.compute_collisions(bb_tree, points_near)
+        coll = _dolfinx.geometry.compute_collisions_points(bb_tree, points_near)
         coll_cells = _dolfinx.geometry.compute_colliding_cells(
             self.spaces.fe_space.mesh, coll, points_near
         )
@@ -471,7 +471,7 @@ class FEBISystem:
         )
 
         # Interpolate into Lagrange for proper visualization
-        V0 = _dolfinx.fem.VectorFunctionSpace(self.spaces.fe_space.mesh, ('DG', 1))
+        V0 = _dolfinx.fem.functionspace(self.spaces.fe_space.mesh, ('DG', 1, (3,)))
         efield_fun_cg = _dolfinx.fem.Function(V0, dtype=_np.complex128)
         efield_fun_cg.interpolate(efield_fun_fe)
         efield_near[fe_points] = efield_fun_cg.eval(points_near[fe_points], closest_cells)
