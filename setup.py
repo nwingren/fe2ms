@@ -10,7 +10,7 @@ subprocess.run('python -m pip install https://github.com/Excalibur-SLE/AdaptOctr
 subprocess.run('python -m pip install https://github.com/nwingren/demcem4py/archive/refs/tags/v1.1.0.tar.gz -v --no-deps', shell=True, check=True)
 
 setup(name='fe2ms',
-      version='0.2.0',
+      version='1.0.0',
       description='A finite element-boundary integral code for electromagnetic scattering',
       url='http://github.com/nwingren/fe2ms',
       author='Niklas Wingren',
