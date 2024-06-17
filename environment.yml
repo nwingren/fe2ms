@@ -14,7 +14,7 @@ dependencies:
   - pip
   - libblas
   - libcblas
-  - suitesparse
+  - suitesparse=5.10
   - swig
   - pip:
     - https://github.com/scikit-umfpack/scikit-umfpack/archive/ce77944bce003a29771ae07be182af348c3eadce.tar.gz
