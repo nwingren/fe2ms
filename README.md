@@ -28,7 +28,7 @@ The use of an isolated mamba/conda environment like this is particularly importa
 
 The FE2MS package and its dependencies are automatically installed by
 ```bash
-pip install https://github.com/nwingren/fe2ms/archive/refs/tags/v1.0.0.tar.gz
+pip install https://github.com/nwingren/fe2ms/archive/refs/tags/v1.1.0.tar.gz
 ```
 
 This installs the packages listed in [environment.yml](environment.yml), as well as [AdaptOctree](https://github.com/Excalibur-SLE/AdaptOctree) and [demcem4py](https://github.com/nwingren/demcem4py).
