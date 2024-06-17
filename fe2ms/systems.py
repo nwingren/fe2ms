@@ -985,7 +985,6 @@ class FEBISystemFull(FEBISystem):
                 )            
 
             # Eliminate interior DoFs
-            _sparse.linalg.use_solver(useUmfpack=True)
             K_LU = _sparse.linalg.factorized(K)
 
         else:
@@ -1416,7 +1415,6 @@ class FEBISystemACA(FEBISystem):
                 )            
 
             # Eliminate interior DoFs
-            _sparse.linalg.use_solver(useUmfpack=True)
             K_LU = _sparse.linalg.factorized(K)
 
         else:

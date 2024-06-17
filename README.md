@@ -2,7 +2,7 @@
 
 FE2MS (Fast and Efficient ElectroMagnetic Solvers) is a Python package implementing the finite element-boundary integral (FE-BI) method for electromagnetic scattering problems.
 
-It uses many other open source packages. Some of the more specialized are [FEniCSx](https://fenicsproject.org/), [DEMCEM](https://github.com/thanospol/DEMCEM), [gmsh](https://gmsh.info/) and [AdaptOctree](https://github.com/Excalibur-SLE/AdaptOctree). Other, more general purpose packages are [NumPy](https://numpy.org/), [SciPy](https://scipy.org/), [UMFPACK](https://scikit-umfpack.github.io/scikit-umfpack/) and [Numba](https://numba.pydata.org/). For a complete list, see [environment.yml](environment.yml) and [setup.py](setup.py).
+It uses many other open source packages. Some of the more specialized are [FEniCSx](https://fenicsproject.org/), [DEMCEM](https://github.com/thanospol/DEMCEM), [gmsh](https://gmsh.info/) and [AdaptOctree](https://github.com/Excalibur-SLE/AdaptOctree). Other, more general purpose packages are [NumPy](https://numpy.org/), [SciPy](https://scipy.org/) and [Numba](https://numba.pydata.org/). For a complete list, see [environment.yml](environment.yml) and [setup.py](setup.py).
 
 Documentation is available on [https://fe2ms.readthedocs.io](https://fe2ms.readthedocs.io).
 

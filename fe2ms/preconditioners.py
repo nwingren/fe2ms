@@ -36,7 +36,7 @@ def direct(
     sparse FE blocks. The approximation to the inverse is formed by computing the sparse LU
     decomposition of this sparse approximation, and applying it in matrix-vector-products.
 
-    The direct LU decomposition uses the UMFPACK library with a sparse matrix,
+    The direct LU decomposition uses the PETSc library with a sparse matrix,
     which gives good performance. Nevertheless, too large systems are ill-suited for direct solvers.
     In those cases, an iterative solver may be considered when computing the preconditioner.
     See sparse_approx_iterative_ilu.
@@ -60,9 +60,26 @@ def direct(
         system.K_prec, system.L_prec, scale
     )
 
-    _sparse_linalg.use_solver(useUmfpack=True)
-    M_prec = _sparse_linalg.factorized(sparse_mat)
-    del sparse_mat
+    sparse_mat = _PETSc.Mat().createAIJ( # pylint: disable=no-member
+        size=sparse_mat.shape, csr=(sparse_mat.indptr, sparse_mat.indices, sparse_mat.data)
+    )
+
+    ksp = _PETSc.KSP() # pylint: disable=no-member
+    ksp.create()
+    ksp.setType(_PETSc.KSP.Type.PREONLY) # pylint: disable=no-member
+    ksp.setOperators(sparse_mat)
+    pc = ksp.getPC()
+    pc.setType(_PETSc.PC.Type.LU) # pylint: disable=no-member
+    pc.setFactorOrdering(ord_type='amd')
+    pc.setReusePreconditioner(True)
+    pc.setUp()
+
+    def M_prec(x):
+        sol_vec, rhs_vec = sparse_mat.createVecs()
+        rhs_vec[:] = x
+
+        ksp.solve(rhs_vec, sol_vec)
+        return sol_vec[:]
 
     return M_prec
 
